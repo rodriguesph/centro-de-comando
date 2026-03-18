@@ -1,4 +1,4 @@
-// CONFIGURAÇÃO DO FIREBASE (MANTENHA AS SUAS CHAVES AQUI)
+// CONFIGURAÇÃO DO FIREBASE (Mantenha as chaves que você já tem)
 const firebaseConfig = {
     apiKey: "AIzaSyC4utmTe19lRJdOJutVmJAdhkfeu4znkpI",
     authDomain: "centrodecomando-paulo.firebaseapp.com",
@@ -10,95 +10,162 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
 const db = firebase.firestore();
-let myChart = null;
+const auth = firebase.auth();
+let allTasks = [];
+let chartInstance = null;
+let currentTaskId = null;
 
-// CONTROLE DE LOGIN
-auth.onAuthStateChanged(async (user) => {
+// NAVEGAÇÃO
+function showSection(sec) {
+    document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
+    document.getElementById(`sec-${sec}`).style.display = 'block';
+}
+
+function addResponsavelField() {
+    const container = document.getElementById('responsaveis-container');
+    const div = document.createElement('div');
+    div.className = 'resp-row';
+    div.style = "display: flex; gap: 5px; margin-bottom: 5px;";
+    div.innerHTML = `<input type="text" class="resp-name" placeholder="Nome" style="flex:1"><input type="email" class="resp-email" placeholder="E-mail" style="flex:1">`;
+    container.appendChild(div);
+}
+
+// LOGIN E DADOS
+auth.onAuthStateChanged(user => {
     if (user) {
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('app-screen').style.display = 'block';
-        document.getElementById('user-email').innerText = user.email;
-        checkAdmin(user.email);
-        loadTasks(user.email);
+        document.getElementById('saudacao').innerText = `Olá, ${user.displayName || 'Gestor'}`;
+        loadData();
     } else {
         document.getElementById('login-screen').style.display = 'flex';
         document.getElementById('app-screen').style.display = 'none';
     }
 });
 
-document.getElementById('login-btn').onclick = () => {
-    const provider = new firebase.auth.GoogleAuthProvider();
-    auth.signInWithPopup(provider);
-};
-
+document.getElementById('login-btn').onclick = () => auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
 function logout() { auth.signOut(); }
 
-// VERIFICAR SE É ADMIN (PAULO)
-async function checkAdmin(email) {
-    const doc = await db.collection('usuarios').doc(email).get();
-    if (doc.exists && doc.data().papel === 'admin') {
-        document.getElementById('admin-input').style.display = 'block';
-        document.getElementById('dashboard-section').style.display = 'block';
-        window.isAdmin = true;
-    }
-}
-
-// ADICIONAR TAREFA (E MANDAR E-MAIL VIA BACKEND)
-async function addTask() {
-    const area = document.getElementById('areaSelect').value;
-    const project = document.getElementById('projectInput').value;
-    const task = document.getElementById('taskInput').value;
-    const email = document.getElementById('emailInput').value;
-    const resp = document.getElementById('respInput').value;
-    const date = document.getElementById('dateInput').value;
-
-    if (!project || !task || !email) return alert("Preencha os campos obrigatórios.");
-
-    const docRef = await db.collection('tarefas').add({
-        area, project, text: task, email, responsavel: resp, 
-        date: date || "Sem prazo", status: 'fazer', criadoEm: new Date(), historico: []
-    });
-
-    // Chamada ao seu servidor Local (Fase 3) para disparar e-mail
-    fetch('http://localhost:3000/enviar-convite', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ email, projeto: project, responsavel: resp })
-    }).catch(e => console.log("Backend offline, e-mail não enviado."));
-
-    alert("Tarefa Delegada!");
-}
-
-// CARREGAR TAREFAS EM TEMPO REAL
-function loadTasks(userEmail) {
+function loadData() {
     db.collection('tarefas').onSnapshot(snapshot => {
-        const tasks = [];
-        snapshot.forEach(doc => tasks.push({ id: doc.id, ...doc.data() }));
-        renderBoard(tasks);
-        if (window.isAdmin) updateDashboard(tasks);
+        allTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        updateProjectList();
+        renderBoard();
+        renderDashboard();
     });
 }
 
-function renderBoard(tasks) {
+function updateProjectList() {
+    const list = document.getElementById('projectsList');
+    const filter = document.getElementById('filterProject');
+    const projects = [...new Set(allTasks.map(t => t.project))];
+    
+    list.innerHTML = projects.map(p => `<option value="${p}">`).join('');
+    filter.innerHTML = '<option value="geral">Visão Geral (Todos os Projetos)</option>' + 
+                       projects.map(p => `<option value="${p}">${p}</option>`).join('');
+}
+
+// SALVAR NOVA DEMANDA
+async function saveDemand() {
+    const project = document.getElementById('projectInput').value;
+    const title = document.getElementById('taskTitle').value;
+    const desc = document.getElementById('taskDesc').value;
+    const date = document.getElementById('dateInput').value;
+    
+    const resps = Array.from(document.querySelectorAll('.resp-row')).map(row => ({
+        nome: row.querySelector('.resp-name').value,
+        email: row.querySelector('.resp-email').value.toLowerCase().trim()
+    })).filter(r => r.email !== "");
+
+    if(!project || !title || resps.length === 0) return alert("Erro: Projeto, Título e Responsável são obrigatórios.");
+
+    const taskData = {
+        project, text: title, descricao: desc, date: date || "Sem prazo",
+        resps, status: 'fazer', criadoEm: new Date(), historico: [],
+        email: resps[0].email // Compatibilidade com regras de segurança
+    };
+
+    await db.collection('tarefas').add(taskData);
+    
+    // Notificar via Backend (Loop de responsáveis)
+    resps.forEach(r => {
+        fetch('http://localhost:3000/enviar-convite', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ email: r.email, projeto: project, responsavel: r.nome })
+        }).catch(e => console.log("Backend offline"));
+    });
+
+    alert("Demanda delegada com sucesso!");
+    showSection('acompanhamento');
+}
+
+// RENDERIZAÇÃO DO DASHBOARD E FILTROS
+function renderDashboard() {
+    const selected = document.getElementById('filterProject').value;
+    const filtered = selected === 'geral' ? allTasks : allTasks.filter(t => t.project === selected);
+    
+    const total = filtered.length;
+    const atrasadas = filtered.filter(t => {
+        if (t.status === 'aprovacao' || t.date === "Sem prazo") return false;
+        return new Date(t.date) < new Date();
+    }).length;
+    const pendentesOK = filtered.filter(t => t.status === 'aprovacao').length;
+    const concluidas = filtered.filter(t => t.status === 'aprovacao').length; // Supondo que OK do gestor = Concluído
+    const percentual = total > 0 ? Math.round((concluidas / total) * 100) : 0;
+
+    const grid = document.getElementById('stats-grid');
+    grid.innerHTML = `
+        <div style="background:#eee;padding:10px;border-radius:5px;text-align:center"><strong>${total}</strong><br><small>Tarefas</small></div>
+        <div style="background:#ffebee;padding:10px;border-radius:5px;text-align:center;color:red"><strong>${atrasadas}</strong><br><small>Atrasadas</small></div>
+        <div style="background:#e3f2fd;padding:10px;border-radius:5px;text-align:center;color:blue"><strong>${pendentesOK}</strong><br><small>Pendentes OK</small></div>
+        <div style="background:#e8f5e9;padding:10px;border-radius:5px;text-align:center"><strong>${percentual}%</strong><br><small>Conclusão</small></div>
+    `;
+
+    // Lógica de Risco
+    const riscoBox = document.getElementById('riscos-alerta');
+    if (selected !== 'geral') {
+        const risco = atrasadas > (total * 0.3) ? {cor: '#ffcdd2', txt: 'ALTO: Mais de 30% de atraso.'} : {cor: '#c8e6c9', txt: 'BAIXO: Cronograma em dia.'};
+        riscoBox.style.background = risco.cor;
+        riscoBox.innerHTML = `<strong>Risco do Projeto:</strong> ${risco.txt}`;
+        riscoBox.style.display = 'block';
+    } else { riscoBox.style.display = 'none'; }
+
+    updateChart(filtered);
+}
+
+function updateChart(tasks) {
+    const stats = { fazer: 0, andamento: 0, aprovacao: 0 };
+    tasks.forEach(t => stats[t.status] = (stats[t.status] || 0) + 1);
+
+    const ctx = document.getElementById('mainChart').getContext('2d');
+    if (chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['A Fazer', 'Em Andamento', 'OK Gestor'],
+            datasets: [{ data: [stats.fazer, stats.andamento, stats.aprovacao], backgroundColor: ['#ef4444', '#f59e0b', '#10b981'] }]
+        }
+    });
+}
+
+function renderBoard() {
     const board = document.getElementById('projectsBoard');
     board.innerHTML = '';
-    
-    // Agrupar por projeto
-    const grouped = tasks.reduce((acc, t) => {
+    const grouped = allTasks.reduce((acc, t) => {
         if (!acc[t.project]) acc[t.project] = [];
         acc[t.project].push(t);
         return acc;
     }, {});
 
-    for (const [proj, items] of Object.entries(grouped)) {
-        let html = `<div class="project-card"><h3>📁 ${proj}</h3>`;
-        items.forEach(t => {
-            html += `
-            <div class="task-item" onclick="abrirModal('${t.id}')" style="cursor:pointer">
-                <div><strong>${t.text}</strong><br><small>👤 ${t.responsavel} - ${t.status}</small></div>
-                <div class="task-meta">${t.date}</div>
+    for (const [proj, tasks] of Object.entries(grouped)) {
+        let html = `<div class="project-card" style="margin-bottom:15px; border:1px solid #ddd; padding:10px; border-radius:8px;">
+            <h4 style="background:#333; color:white; padding:5px; border-radius:4px;">📁 ${proj} (${tasks.length} tarefas)</h4>`;
+        tasks.forEach(t => {
+            html += `<div onclick="abrirModal('${t.id}')" style="cursor:pointer; padding:8px; border-bottom:1px solid #eee;">
+                <strong>${t.text}</strong> <small>(${t.responsavel || t.resps[0].nome})</small>
+                <span style="float:right; font-size:0.7rem;">${t.status}</span>
             </div>`;
         });
         html += `</div>`;
@@ -106,48 +173,33 @@ function renderBoard(tasks) {
     }
 }
 
-// MODAL E HISTÓRICO
+// MODAL E EDIÇÃO
 async function abrirModal(id) {
-    window.currentTaskId = id;
-    const doc = await db.collection('tarefas').doc(id).get();
-    const data = doc.data();
-    
-    document.getElementById('modal-detalhes').style.display = 'block';
-    document.getElementById('modal-titulo').innerText = data.text;
-    document.getElementById('modal-status-txt').innerText = data.status.toUpperCase();
-    document.getElementById('modal-desc').value = data.descricao || "";
-    
-    const histDiv = document.getElementById('modal-historico');
-    histDiv.innerHTML = (data.historico || []).map(h => `<div><b>${h.data}:</b> ${h.texto}</div>`).join('');
+    currentTaskId = id;
+    const task = allTasks.find(t => t.id === id);
+    document.getElementById('taskModal').style.display = 'block';
+    document.getElementById('modalTitle').innerText = task.text;
+    document.getElementById('modalInfo').innerText = `Projeto: ${task.project} | Prazo: ${task.date}`;
+    document.getElementById('modalDesc').value = task.descricao || "";
+    document.getElementById('modalHistorico').innerHTML = (task.historico || []).map(h => `<div>[${h.data}] ${h.texto}</div>`).join('');
 }
 
-function fecharModal() { document.getElementById('modal-detalhes').style.display = 'none'; }
+function closeModal() { document.getElementById('taskModal').style.display = 'none'; }
 
-async function salvarUpdate() {
-    const desc = document.getElementById('modal-desc').value;
-    const novoH = { data: new Date().toLocaleDateString(), texto: desc };
-    
-    await db.collection('tarefas').doc(window.currentTaskId).update({
+async function saveModalChanges() {
+    const desc = document.getElementById('modalDesc').value;
+    const log = { data: new Date().toLocaleDateString(), texto: "Report: " + desc.substring(0, 30) + "..." };
+    await db.collection('tarefas').doc(currentTaskId).update({
         descricao: desc,
-        historico: firebase.firestore.FieldValue.arrayUnion(novoH),
-        status: 'andamento' // Muda status automaticamente ao reportar
+        historico: firebase.firestore.FieldValue.arrayUnion(log),
+        status: 'andamento'
     });
-    alert("Report enviado!");
-    fecharModal();
+    alert("Dados salvos!");
+    closeModal();
 }
 
-// DASHBOARD (CHART.JS)
-function updateDashboard(tasks) {
-    const stats = { fazer: 0, andamento: 0, aprovacao: 0 };
-    tasks.forEach(t => stats[t.status] = (stats[t.status] || 0) + 1);
-
-    const ctx = document.getElementById('statusChart').getContext('2d');
-    if (myChart) myChart.destroy();
-    myChart = new Chart(ctx, {
-        type: 'pie',
-        data: {
-            labels: ['A Fazer', 'Em Andamento', 'Aguardando OK'],
-            datasets: [{ data: [stats.fazer, stats.andamento, stats.aprovacao], backgroundColor: ['#ff6384', '#ffcd56', '#36a2eb'] }]
-        }
-    });
+async function updateTaskStatus(novoStatus) {
+    await db.collection('tarefas').doc(currentTaskId).update({ status: novoStatus });
+    alert("Status atualizado!");
+    closeModal();
 }

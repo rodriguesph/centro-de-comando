@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Centro de Comando - Administrativo</title>
+    <title>Centro de Comando v3.0 - Gestão Estratégica</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
@@ -12,62 +12,84 @@
 </head>
 <body>
     <div id="login-screen" class="container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh;">
-        <h1>Acesso Restrito - Gestão Integrado</h1>
+        <h1>Centro de Comando - Integrado</h1>
         <button id="login-btn" class="add-btn">Entrar com Google</button>
     </div>
 
     <div id="app-screen" class="container" style="display: none;">
-        <header style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 10px;">
-            <h2>Painel de Controle</h2>
-            <div id="user-area">
-                <span id="user-email" style="font-weight: bold; font-size: 0.8rem;"></span>
+        <header style="border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2 id="saudacao">Olá, Paulo</h2>
                 <button onclick="logout()" class="btn-delete" style="padding: 5px 10px;">Sair</button>
             </div>
+            <nav style="margin-top: 15px; display: flex; gap: 10px;">
+                <button onclick="showSection('novo-projeto')" class="btn-nav">➕ Novo Projeto / Demanda</button>
+                <button onclick="showSection('acompanhamento')" class="btn-nav">📊 Acompanhe seus Projetos</button>
+            </nav>
         </header>
 
-        <section id="dashboard-section" style="display: none; margin: 20px 0; padding: 15px; background: #f9f9f9; border-radius: 8px;">
-            <h3>Visão Geral da Operação</h3>
+        <section id="sec-novo-projeto" class="content-section" style="display: none;">
+            <div class="input-section">
+                <h3>Inclusão de Demanda Estratégica</h3>
+                <div class="form-row">
+                    <select id="areaSelect">
+                        <option value="Coordenação">Coordenação</option>
+                        <option value="Docência">Docência</option>
+                        <option value="DEA">DEA</option>
+                        <option value="Pessoal">Pessoal</option>
+                    </select>
+                    <input type="text" id="projectInput" list="projectsList" placeholder="Projeto (Selecione ou digite novo)" style="flex:2">
+                    <datalist id="projectsList"></datalist>
+                </div>
+                <input type="text" id="taskTitle" placeholder="Título da Tarefa (Ex: Relatório ENADE)">
+                <textarea id="taskDesc" placeholder="Descrição detalhada da demanda..." rows="3"></textarea>
+                
+                <div id="responsaveis-container" style="background: #f0f0f0; padding: 10px; border-radius: 5px; margin-top: 10px;">
+                    <label>Responsáveis:</label>
+                    <div class="resp-row" style="display: flex; gap: 5px; margin-bottom: 5px;">
+                        <input type="text" class="resp-name" placeholder="Nome" style="flex:1">
+                        <input type="email" class="resp-email" placeholder="E-mail" style="flex:1">
+                    </div>
+                </div>
+                <button onclick="addResponsavelField()" class="btn-small" style="margin-bottom: 15px;">+ Adicionar outro responsável</button>
+                
+                <div class="form-row">
+                    <input type="date" id="dateInput">
+                    <button onclick="saveDemand()" class="add-btn">Lançar Demanda</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="sec-acompanhamento" class="content-section" style="display: none;">
+            <div style="background: #f4f4f4; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <label>Filtrar Visão:</label>
+                <select id="filterProject" onchange="renderDashboard()" style="width: 100%; padding: 10px; margin-top: 5px;"></select>
+            </div>
+
+            <div id="stats-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px;">
+                </div>
+
+            <div id="riscos-alerta" style="padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none;"></div>
+
             <div style="max-width: 300px; margin: auto;">
-                <canvas id="statusChart"></canvas>
+                <canvas id="mainChart"></canvas>
             </div>
         </section>
 
-        <section id="admin-input" style="display: none;" class="input-section">
-            <h3>Nova Demanda Estratégica</h3>
-            <div class="form-row">
-                <select id="areaSelect">
-                    <option value="Coordenação">Coordenação</option>
-                    <option value="Docência">Docência</option>
-                    <option value="DEA">DEA</option>
-                    <option value="Pessoal">Pessoal</option>
-                </select>
-                <input type="text" id="projectInput" placeholder="Projeto (Ex: ENADE 2026)">
-            </div>
-            <input type="text" id="taskInput" placeholder="Ação específica...">
-            <div class="form-row">
-                <input type="text" id="respInput" placeholder="Responsável">
-                <input type="email" id="emailInput" placeholder="E-mail Institucional">
-                <input type="date" id="dateInput">
-                <button onclick="addTask()" class="add-btn">Delegar</button>
-            </div>
-        </section>
-
-        <div id="projectsBoard"></div>
+        <hr>
+        <div id="projectsBoard" style="margin-top: 20px;"></div>
     </div>
 
-    <div id="modal-detalhes" class="modal" style="display:none;">
-        <div class="modal-content">
-            <h3 id="modal-titulo">Detalhes da Atividade</h3>
-            <p><strong>Status Atual:</strong> <span id="modal-status-txt"></span></p>
-            <label>Relatório de Execução / Descrição:</label>
-            <textarea id="modal-desc" rows="5" placeholder="Descreva o que foi feito..."></textarea>
-            
-            <h4>Histórico de Reports</h4>
-            <div id="modal-historico" style="max-height: 150px; overflow-y: auto; background: #eee; padding: 10px; font-size: 0.8rem; margin-bottom: 15px;"></div>
-            
-            <div style="display: flex; gap: 10px;">
-                <button onclick="salvarUpdate()" class="add-btn">Salvar Alterações</button>
-                <button onclick="fecharModal()" class="btn-delete">Fechar</button>
+    <div id="taskModal" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000;">
+        <div style="background: white; width: 90%; max-width: 500px; margin: 5% auto; padding: 20px; border-radius: 10px;">
+            <h3 id="modalTitle"></h3>
+            <p id="modalInfo" style="font-size: 0.8rem; color: #666;"></p>
+            <textarea id="modalDesc" rows="5" style="width: 100%; margin: 10px 0;"></textarea>
+            <div id="modalHistorico" style="height: 100px; overflow-y: auto; background: #eee; padding: 5px; font-size: 0.75rem;"></div>
+            <div style="margin-top: 15px; display: flex; gap: 10px;">
+                <button onclick="updateTaskStatus('aprovacao')" class="btn-nav">Enviar p/ OK do Gestor</button>
+                <button onclick="saveModalChanges()" class="add-btn">Salvar Report</button>
+                <button onclick="closeModal()" class="btn-delete">Fechar</button>
             </div>
         </div>
     </div>
