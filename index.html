@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Comando</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="login-screen" class="container" style="text-align: center; max-width: 400px; margin-top: 10vh;">
+        <h1>Acesso Restrito</h1>
+        <p style="margin-bottom: 20px; color: #71717a;">Faça login para acessar o sistema.</p>
+        <button id="login-btn" class="add-btn" style="width: 100%;">Entrar com Google</button>
+    </div>
+
+    <div id="app-screen" class="container" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h1>Centro de Comando</h1>
+            <div>
+                <span id="user-info" style="font-size: 0.8rem; font-weight: bold; margin-right: 10px;"></span>
+                <button id="logout-btn" class="btn btn-delete">Sair</button>
+            </div>
+        </div>
+        
+        <div class="input-section">
+            <div class="form-row">
+                <div class="input-group">
+                    <label>ÁREA</label>
+                    <select id="areaSelect">
+                        <option value="Coordenação">Coordenação</option>
+                        <option value="Docência">Docência</option>
+                        <option value="DEA">DEA</option>
+                        <option value="Pessoal">Pessoal</option>
+                    </select>
+                </div>
+                <div class="input-group" style="flex: 2;">
+                    <label>PROJETO (Agrupador)</label>
+                    <input type="text" id="projectInput" placeholder="Ex: C.A.F.E. 2026">
+                </div>
+            </div>
+            <div class="input-group">
+                <label>NOME DA TAREFA</label>
+                <input type="text" id="taskInput" placeholder="Ex: Fechar orçamento do coffee break">
+            </div>
+            <div class="form-row">
+                <div class="input-group" style="flex: 1.5;">
+                    <label>RESPONSÁVEL</label>
+                    <input type="text" id="respInput" placeholder="Ex: Eu, Paula...">
+                </div>
+                <div class="input-group" style="flex: 1.5;">
+                    <label>E-MAIL</label>
+                    <input type="email" id="emailInput" placeholder="email@grupointegrado.br">
+                </div>
+                <div class="input-group date-group">
+                    <label>PRAZO FINAL</label>
+                    <input type="date" id="dateInput">
+                </div>
+                <button id="add-task-btn" class="add-btn">Adicionar</button>
+            </div>
+        </div>
+
+        <div class="board" id="projectsBoard">
+            </div>
+    </div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>
