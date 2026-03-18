@@ -3,66 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel de Comando</title>
+    <title>Centro de Comando - Administrativo</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <div id="login-screen" class="container" style="text-align: center; max-width: 400px; margin-top: 10vh;">
-        <h1>Acesso Restrito</h1>
-        <p style="margin-bottom: 20px; color: #71717a;">Faça login para acessar o sistema.</p>
-        <button id="login-btn" class="add-btn" style="width: 100%;">Entrar com Google</button>
+    <div id="login-screen" class="container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh;">
+        <h1>Acesso Restrito - Gestão Integrado</h1>
+        <button id="login-btn" class="add-btn">Entrar com Google</button>
     </div>
 
     <div id="app-screen" class="container" style="display: none;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h1>Centro de Comando</h1>
-            <div>
-                <span id="user-info" style="font-size: 0.8rem; font-weight: bold; margin-right: 10px;"></span>
-                <button id="logout-btn" class="btn btn-delete">Sair</button>
+        <header style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 10px;">
+            <h2>Painel de Controle</h2>
+            <div id="user-area">
+                <span id="user-email" style="font-weight: bold; font-size: 0.8rem;"></span>
+                <button onclick="logout()" class="btn-delete" style="padding: 5px 10px;">Sair</button>
             </div>
-        </div>
-        
-        <div class="input-section">
-            <div class="form-row">
-                <div class="input-group">
-                    <label>ÁREA</label>
-                    <select id="areaSelect">
-                        <option value="Coordenação">Coordenação</option>
-                        <option value="Docência">Docência</option>
-                        <option value="DEA">DEA</option>
-                        <option value="Pessoal">Pessoal</option>
-                    </select>
-                </div>
-                <div class="input-group" style="flex: 2;">
-                    <label>PROJETO (Agrupador)</label>
-                    <input type="text" id="projectInput" placeholder="Ex: C.A.F.E. 2026">
-                </div>
-            </div>
-            <div class="input-group">
-                <label>NOME DA TAREFA</label>
-                <input type="text" id="taskInput" placeholder="Ex: Fechar orçamento do coffee break">
-            </div>
-            <div class="form-row">
-                <div class="input-group" style="flex: 1.5;">
-                    <label>RESPONSÁVEL</label>
-                    <input type="text" id="respInput" placeholder="Ex: Eu, Paula...">
-                </div>
-                <div class="input-group" style="flex: 1.5;">
-                    <label>E-MAIL</label>
-                    <input type="email" id="emailInput" placeholder="email@grupointegrado.br">
-                </div>
-                <div class="input-group date-group">
-                    <label>PRAZO FINAL</label>
-                    <input type="date" id="dateInput">
-                </div>
-                <button id="add-task-btn" class="add-btn">Adicionar</button>
-            </div>
-        </div>
+        </header>
 
-        <div class="board" id="projectsBoard">
+        <section id="dashboard-section" style="display: none; margin: 20px 0; padding: 15px; background: #f9f9f9; border-radius: 8px;">
+            <h3>Visão Geral da Operação</h3>
+            <div style="max-width: 300px; margin: auto;">
+                <canvas id="statusChart"></canvas>
             </div>
+        </section>
+
+        <section id="admin-input" style="display: none;" class="input-section">
+            <h3>Nova Demanda Estratégica</h3>
+            <div class="form-row">
+                <select id="areaSelect">
+                    <option value="Coordenação">Coordenação</option>
+                    <option value="Docência">Docência</option>
+                    <option value="DEA">DEA</option>
+                    <option value="Pessoal">Pessoal</option>
+                </select>
+                <input type="text" id="projectInput" placeholder="Projeto (Ex: ENADE 2026)">
+            </div>
+            <input type="text" id="taskInput" placeholder="Ação específica...">
+            <div class="form-row">
+                <input type="text" id="respInput" placeholder="Responsável">
+                <input type="email" id="emailInput" placeholder="E-mail Institucional">
+                <input type="date" id="dateInput">
+                <button onclick="addTask()" class="add-btn">Delegar</button>
+            </div>
+        </section>
+
+        <div id="projectsBoard"></div>
     </div>
 
-    <script type="module" src="script.js"></script>
+    <div id="modal-detalhes" class="modal" style="display:none;">
+        <div class="modal-content">
+            <h3 id="modal-titulo">Detalhes da Atividade</h3>
+            <p><strong>Status Atual:</strong> <span id="modal-status-txt"></span></p>
+            <label>Relatório de Execução / Descrição:</label>
+            <textarea id="modal-desc" rows="5" placeholder="Descreva o que foi feito..."></textarea>
+            
+            <h4>Histórico de Reports</h4>
+            <div id="modal-historico" style="max-height: 150px; overflow-y: auto; background: #eee; padding: 10px; font-size: 0.8rem; margin-bottom: 15px;"></div>
+            
+            <div style="display: flex; gap: 10px;">
+                <button onclick="salvarUpdate()" class="add-btn">Salvar Alterações</button>
+                <button onclick="fecharModal()" class="btn-delete">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
 </body>
 </html>
