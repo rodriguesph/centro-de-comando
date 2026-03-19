@@ -91,18 +91,14 @@ async function saveDemand() {
     
     // Notificar Render
     resps.forEach(r => {
-        fetch('https://centro-de-comando-api.onrender.com/enviar-convite', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ email: r.email, projeto: project, responsavel: r.nome })
-        }).catch(() => console.log("Backend Offline"));
-    });
-
-    alert("Demanda lançada!");
-    document.getElementById('taskTitle').value = "";
-    document.getElementById('taskDesc').value = "";
-    showSection('acompanhamento');
-}
+       resps.forEach(r => {
+    emailjs.send("service_yw91uty", "template_p5wyzq8", {
+        responsavel: r.nome,
+        projeto: project,
+        email_to: r.email // Certifique-se de configurar a variável de destino no template do EmailJS para usar {{email_to}}
+    }).then(() => console.log("E-mail enviado para " + r.nome))
+      .catch(err => console.error("Erro no e-mail", err));
+});
 
 // DASHBOARD
 function renderDashboard() {
@@ -150,13 +146,19 @@ function renderBoard() {
     }, {});
 
     for (const [proj, tasks] of Object.entries(grouped)) {
-        let html = `<div class="project-card"><h4>📁 ${proj}</h4>`;
+        let html = `<div class="project-card" style="margin-bottom:15px; border:1px solid #ddd; padding:10px; border-radius:8px;">
+            <h4 style="background:#1e293b; color:white; padding:8px; border-radius:4px; margin-bottom:10px;">📁 ${proj}</h4>`;
+        
         tasks.forEach(t => {
-            html += `<div class="task-item" onclick="abrirModal('${t.id}')">
-                <strong>${t.text}</strong> <small>(${t.resps[0].nome})</small>
-                <span style="float:right">${t.status}</span>
+            // BLINDAGEM: Se a tarefa for nova, usa o array. Se for velha, usa o texto antigo.
+            const nomeResp = t.resps && t.resps.length > 0 ? t.resps[0].nome : (t.responsavel || "Não atribuído");
+            
+            html += `<div class="task-item" onclick="abrirModal('${t.id}')" style="cursor:pointer; padding:8px; border-bottom:1px solid #eee;">
+                <strong>${t.text}</strong> <small>(${nomeResp})</small>
+                <span style="float:right; font-size:0.8rem; background:#e2e8f0; padding:2px 6px; border-radius:4px;">${t.status.toUpperCase()}</span>
             </div>`;
         });
+        
         html += `</div>`;
         board.innerHTML += html;
     }
