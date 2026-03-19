@@ -1,3 +1,4 @@
+// 1. CONFIGURAÇÃO DO FIREBASE (MANTENHA SUAS CHAVES AQUI)
 const firebaseConfig = {
     apiKey: "AIzaSyC4utmTe19lRJdOJutVmJAdhkfeu4znkpI",
     authDomain: "centrodecomando-paulo.firebaseapp.com",
@@ -15,7 +16,7 @@ let allTasks = [];
 let chartInstance = null;
 let currentTaskId = null;
 
-// NAVEGAÇÃO
+// 2. NAVEGAÇÃO E UI
 function showSection(sec) {
     document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
     document.getElementById(`sec-${sec}`).style.display = 'block';
@@ -30,7 +31,7 @@ function addResponsavelField() {
     container.appendChild(div);
 }
 
-// AUTH
+// 3. AUTENTICAÇÃO
 auth.onAuthStateChanged(user => {
     if (user) {
         document.getElementById('login-screen').style.display = 'none';
@@ -46,6 +47,7 @@ auth.onAuthStateChanged(user => {
 document.getElementById('login-btn').onclick = () => auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
 function logout() { auth.signOut(); }
 
+// 4. CARREGAMENTO DE DADOS
 function loadData() {
     db.collection('tarefas').onSnapshot(snapshot => {
         allTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -63,10 +65,10 @@ function updateProjectList() {
     filter.innerHTML = '<option value="geral">Visão Geral</option>' + projects.map(p => `<option value="${p}">${p}</option>`).join('');
 }
 
-// SALVAR NOVA DEMANDA (CORRIGIDO)
+// 5. SALVAR DEMANDA E DISPARAR E-MAIL (EMAILJS)
 async function saveDemand() {
     const project = document.getElementById('projectInput').value;
-    const title = document.getElementById('taskTitle').value; // Aqui estava o erro do print
+    const title = document.getElementById('taskTitle').value; 
     const desc = document.getElementById('taskDesc').value;
     const date = document.getElementById('dateInput').value;
     const area = document.getElementById('areaSelect').value;
@@ -87,20 +89,27 @@ async function saveDemand() {
         email: resps[0].email
     };
 
+    // Salva no Banco de Dados
     await db.collection('tarefas').add(taskData);
     
-    // Notificar Render
+    // Dispara o E-mail via EmailJS
+    // ATENÇÃO PAULO: COLOQUE SEU SERVICE_ID E TEMPLATE_ID ABAIXO
     resps.forEach(r => {
-       resps.forEach(r => {
-    emailjs.send("service_yw91uty", "template_p5wyzq8", {
-        responsavel: r.nome,
-        projeto: project,
-        email_to: r.email // Certifique-se de configurar a variável de destino no template do EmailJS para usar {{email_to}}
-    }).then(() => console.log("E-mail enviado para " + r.nome))
-      .catch(err => console.error("Erro no e-mail", err));
-});
+        emailjs.send(service_yw91uty, "template_p5wyzq8, {
+            responsavel: r.nome,
+            projeto: project,
+            email_to: r.email 
+        }).then(() => console.log("E-mail enviado para " + r.nome))
+          .catch(err => console.error("Erro no e-mail", err));
+    });
 
-// DASHBOARD
+    alert("Demanda lançada e e-mail enviado!");
+    document.getElementById('taskTitle').value = "";
+    document.getElementById('taskDesc').value = "";
+    showSection('acompanhamento');
+}
+
+// 6. DASHBOARD E QUADRO DE TAREFAS
 function renderDashboard() {
     const selected = document.getElementById('filterProject').value;
     const filtered = selected === 'geral' ? allTasks : allTasks.filter(t => t.project === selected);
@@ -124,7 +133,7 @@ function renderDashboard() {
 
 function updateChart(tasks) {
     const s = { fazer: 0, andamento: 0, aprovacao: 0 };
-    tasks.forEach(t => s[t.status]++);
+    tasks.forEach(t => s[t.status] = (s[t.status] || 0) + 1);
     const ctx = document.getElementById('mainChart').getContext('2d');
     if (chartInstance) chartInstance.destroy();
     chartInstance = new Chart(ctx, {
@@ -150,7 +159,7 @@ function renderBoard() {
             <h4 style="background:#1e293b; color:white; padding:8px; border-radius:4px; margin-bottom:10px;">📁 ${proj}</h4>`;
         
         tasks.forEach(t => {
-            // BLINDAGEM: Se a tarefa for nova, usa o array. Se for velha, usa o texto antigo.
+            // Blindagem contra dados antigos
             const nomeResp = t.resps && t.resps.length > 0 ? t.resps[0].nome : (t.responsavel || "Não atribuído");
             
             html += `<div class="task-item" onclick="abrirModal('${t.id}')" style="cursor:pointer; padding:8px; border-bottom:1px solid #eee;">
@@ -164,7 +173,7 @@ function renderBoard() {
     }
 }
 
-// MODAL DE GESTÃO (EDITAR / EXCLUIR)
+// 7. MODAL DE GESTÃO E EXCLUSÃO
 async function abrirModal(id) {
     currentTaskId = id;
     const t = allTasks.find(x => x.id === id);
