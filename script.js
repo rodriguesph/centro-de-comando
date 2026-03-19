@@ -1,4 +1,4 @@
-// 1. CONFIGURAÇÃO DO FIREBASE (MANTENHA SUAS CHAVES AQUI)
+// 1. CONFIGURAÇÃO DO FIREBASE
 const firebaseConfig = {
     apiKey: "AIzaSyC4utmTe19lRJdOJutVmJAdhkfeu4znkpI",
     authDomain: "centrodecomando-paulo.firebaseapp.com",
@@ -92,10 +92,9 @@ async function saveDemand() {
     // Salva no Banco de Dados
     await db.collection('tarefas').add(taskData);
     
-    // Dispara o E-mail via EmailJS
-    // ATENÇÃO PAULO: COLOQUE SEU SERVICE_ID E TEMPLATE_ID ABAIXO
+    // Dispara o E-mail via EmailJS (CORRIGIDO: COM ASPAS E SINTAXE FECHADA)
     resps.forEach(r => {
-        emailjs.send(service_yw91uty, "template_p5wyzq8, {
+        emailjs.send("service_yw91uty", "template_p5wyzq8", {
             responsavel: r.nome,
             projeto: project,
             email_to: r.email 

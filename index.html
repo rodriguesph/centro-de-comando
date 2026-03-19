@@ -9,12 +9,13 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     <script type="text/javascript">
-    (function() {
-        emailjs.init("avO3v8VXJm6ZQyZ9a");
-    })();
-</script>
+        (function() {
+            emailjs.init("avO3v8VXJm6ZQyZ9a");
+        })();
+    </script>
 </head>
 <body>
     <div id="login-screen" class="container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh;">
@@ -37,22 +38,31 @@
         <section id="sec-novo-projeto" class="content-section" style="display: none;">
             <div class="input-section">
                 <h3>Inclusão de Demanda Estratégica</h3>
+                
+                <label style="font-size: 0.85rem; font-weight: bold;">Área Estratégica:</label>
                 <div class="form-row">
-                    <label style="font-size: 0.85rem; font-weight: bold;">Área Estratégica:</label>
-<div class="form-row">
-    <select id="areaSelect" style="width: 100%;">
-        <option value="Coordenação">Coordenação</option>
-        <option value="Docência">Docência</option>
-        <option value="DEA">DEA</option>
-        <option value="Pessoal">Pessoal</option>
-    </select>
-</div>
+                    <select id="areaSelect" style="width: 100%;">
+                        <option value="Coordenação">Coordenação</option>
+                        <option value="Docência">Docência</option>
+                        <option value="DEA">DEA</option>
+                        <option value="Pessoal">Pessoal</option>
+                    </select>
+                </div>
 
-<label style="font-size: 0.85rem; font-weight: bold;">Projeto (Selecione ou digite um novo):</label>
-<div class="form-row">
-    <input type="text" id="projectInput" list="projectsList" placeholder="Ex: C.A.F.E. 2026" style="width: 100%;">
-    <datalist id="projectsList"></datalist>
-</div>
+                <label style="font-size: 0.85rem; font-weight: bold;">Projeto (Selecione ou digite um novo):</label>
+                <div class="form-row">
+                    <input type="text" id="projectInput" list="projectsList" placeholder="Ex: C.A.F.E. 2026" style="width: 100%;">
+                    <datalist id="projectsList"></datalist>
+                </div>
+
+                <input type="text" id="taskTitle" placeholder="Título da Tarefa">
+                <textarea id="taskDesc" placeholder="Descrição detalhada..." rows="3"></textarea>
+                
+                <div id="responsaveis-container">
+                    <div class="resp-row" style="display: flex; gap: 5px; margin-bottom: 5px;">
+                        <input type="text" class="resp-name" placeholder="Nome Responsável">
+                        <input type="email" class="resp-email" placeholder="E-mail">
+                    </div>
                 </div>
                 <button onclick="addResponsavelField()" class="btn-small" style="margin: 10px 0;">+ Adicionar outro responsável</button>
                 
