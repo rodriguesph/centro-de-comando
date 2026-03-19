@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Centro de Comando v3.0 - Gestão Estratégica</title>
+    <title>Centro de Comando v3.5 - Gestão de Mim</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
@@ -17,10 +17,10 @@
     </div>
 
     <div id="app-screen" class="container" style="display: none;">
-        <header style="border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px;">
+        <header>
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <h2 id="saudacao">Olá, Paulo</h2>
-                <button onclick="logout()" class="btn-delete" style="padding: 5px 10px;">Sair</button>
+                <button onclick="logout()" class="btn-delete">Sair</button>
             </div>
             <nav style="margin-top: 15px; display: flex; gap: 10px;">
                 <button onclick="showSection('novo-projeto')" class="btn-nav">➕ Novo Projeto / Demanda</button>
@@ -41,17 +41,16 @@
                     <input type="text" id="projectInput" list="projectsList" placeholder="Projeto (Selecione ou digite novo)" style="flex:2">
                     <datalist id="projectsList"></datalist>
                 </div>
-                <input type="text" id="taskTitle" placeholder="Título da Tarefa (Ex: Relatório ENADE)">
-                <textarea id="taskDesc" placeholder="Descrição detalhada da demanda..." rows="3"></textarea>
+                <input type="text" id="taskTitle" placeholder="Título da Tarefa">
+                <textarea id="taskDesc" placeholder="Descrição detalhada..." rows="3"></textarea>
                 
-                <div id="responsaveis-container" style="background: #f0f0f0; padding: 10px; border-radius: 5px; margin-top: 10px;">
-                    <label>Responsáveis:</label>
+                <div id="responsaveis-container">
                     <div class="resp-row" style="display: flex; gap: 5px; margin-bottom: 5px;">
-                        <input type="text" class="resp-name" placeholder="Nome" style="flex:1">
-                        <input type="email" class="resp-email" placeholder="E-mail" style="flex:1">
+                        <input type="text" class="resp-name" placeholder="Nome Responsável">
+                        <input type="email" class="resp-email" placeholder="E-mail">
                     </div>
                 </div>
-                <button onclick="addResponsavelField()" class="btn-small" style="margin-bottom: 15px;">+ Adicionar outro responsável</button>
+                <button onclick="addResponsavelField()" class="btn-small" style="margin: 10px 0;">+ Adicionar outro responsável</button>
                 
                 <div class="form-row">
                     <input type="date" id="dateInput">
@@ -61,35 +60,41 @@
         </section>
 
         <section id="sec-acompanhamento" class="content-section" style="display: none;">
-            <div style="background: #f4f4f4; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                <label>Filtrar Visão:</label>
-                <select id="filterProject" onchange="renderDashboard()" style="width: 100%; padding: 10px; margin-top: 5px;"></select>
-            </div>
-
-            <div id="stats-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px;">
-                </div>
-
-            <div id="riscos-alerta" style="padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none;"></div>
-
-            <div style="max-width: 300px; margin: auto;">
-                <canvas id="mainChart"></canvas>
-            </div>
+            <select id="filterProject" onchange="renderDashboard()" style="margin-bottom: 20px;"></select>
+            <div id="stats-grid" class="stats-grid"></div>
+            <div id="riscos-alerta" class="alert-box" style="display: none;"></div>
+            <div style="max-width: 250px; margin: auto;"><canvas id="mainChart"></canvas></div>
         </section>
 
         <hr>
-        <div id="projectsBoard" style="margin-top: 20px;"></div>
+        <div id="projectsBoard"></div>
     </div>
 
-    <div id="taskModal" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000;">
-        <div style="background: white; width: 90%; max-width: 500px; margin: 5% auto; padding: 20px; border-radius: 10px;">
-            <h3 id="modalTitle"></h3>
-            <p id="modalInfo" style="font-size: 0.8rem; color: #666;"></p>
-            <textarea id="modalDesc" rows="5" style="width: 100%; margin: 10px 0;"></textarea>
-            <div id="modalHistorico" style="height: 100px; overflow-y: auto; background: #eee; padding: 5px; font-size: 0.75rem;"></div>
-            <div style="margin-top: 15px; display: flex; gap: 10px;">
-                <button onclick="updateTaskStatus('aprovacao')" class="btn-nav">Enviar p/ OK do Gestor</button>
-                <button onclick="saveModalChanges()" class="add-btn">Salvar Report</button>
-                <button onclick="closeModal()" class="btn-delete">Fechar</button>
+    <div id="taskModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <h3>Gestão da Tarefa</h3>
+            <label>Título:</label>
+            <input type="text" id="editTitle">
+            
+            <label>Descrição/Report:</label>
+            <textarea id="editDesc" rows="4"></textarea>
+            
+            <label>Prazo:</label>
+            <input type="date" id="editDate">
+
+            <label>Status:</label>
+            <select id="editStatus">
+                <option value="fazer">A Fazer</option>
+                <option value="andamento">Em Andamento</option>
+                <option value="aprovacao">Aguardando OK Gestor</option>
+            </select>
+            
+            <div id="modalHistorico"></div>
+            
+            <div class="modal-actions">
+                <button onclick="saveModalChanges()" class="add-btn">Salvar Alterações</button>
+                <button onclick="deleteTask()" class="btn-delete">Excluir Demanda</button>
+                <button onclick="closeModal()" style="background:#666; color:white;">Fechar</button>
             </div>
         </div>
     </div>
