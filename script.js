@@ -1,3 +1,4 @@
+// 1. CONFIGURAÇÃO DO FIREBASE
 const firebaseConfig = {
     apiKey: "AIzaSyC4utmTe19lRJdOJutVmJAdhkfeu4znkpI",
     authDomain: "centrodecomando-paulo.firebaseapp.com",
@@ -12,10 +13,12 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
 
+// PAULO: Após configurar o Looker Studio, cole a URL do iframe aqui entre aspas.
+const LOOKER_STUDIO_EMBED_URL = ""; 
+
 let allTasks = [];
 let allUsers = []; 
 let chartInstance = null;
-let userBarChartInstance = null; // Novo motor do gráfico de barras
 let currentTaskId = null;
 let currentUserEmail = null; 
 let currentUserRole = null; 
@@ -43,8 +46,10 @@ function addResponsavelField() {
     const div = document.createElement('div');
     div.className = 'resp-row';
     div.style = "display: flex; gap: 5px; margin-bottom: 5px;";
+    
     const optionsHTML = '<option value="">Selecione um membro credenciado...</option>' + 
         allUsers.map(u => `<option value="${u.email}">${u.nome} (${u.email})</option>`).join('');
+    
     div.innerHTML = `<select class="resp-select" style="width: 100%;">${optionsHTML}</select>`;
     container.appendChild(div);
 }
@@ -71,7 +76,8 @@ auth.onAuthStateChanged(async user => {
             if(btnNovo) btnNovo.style.display = (currentUserRole === 'super-admin' || currentUserRole === 'gestor') ? 'inline-block' : 'none';
             if(btnUsuarios) btnUsuarios.style.display = (currentUserRole === 'super-admin') ? 'inline-block' : 'none';
             
-            showSection('acompanhamento');
+            showSection('dashboard-bi'); // Começa na aba do BI
+            initializeBI(); // Carrega o BI se a URL estiver pronta
             loadData();
             loadUsersDatabase(); 
             
@@ -90,13 +96,19 @@ auth.onAuthStateChanged(async user => {
 document.getElementById('login-btn').onclick = () => auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
 function logout() { auth.signOut(); }
 
+function initializeBI() {
+    const container = document.getElementById('bi-embed-container');
+    if(LOOKER_STUDIO_EMBED_URL !== "") {
+        container.innerHTML = `<iframe width="100%" height="100%" src="${LOOKER_STUDIO_EMBED_URL}" frameborder="0" style="border:0" allowfullscreen></iframe>`;
+        container.style.border = "none";
+        container.style.padding = "0";
+    }
+}
+
 function loadData() {
     db.collection('tarefas').onSnapshot(snapshot => {
         allTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
-        // A CORREÇÃO DO FILTRO: Separamos a montagem da lista da renderização
-        const visibleTasks = getVisibleTasks();
-        updateProjectList(visibleTasks); 
+        updateProjectList();
         renderDashboard();
         renderBoard();
     });
@@ -110,13 +122,15 @@ function loadUsersDatabase() {
     });
 }
 
+// SALVAR NOVA DEMANDA (COM DATA INÍCIO E FIM)
 async function saveDemand() {
     if (currentUserRole !== 'super-admin' && currentUserRole !== 'gestor') return;
 
     const project = document.getElementById('projectInput').value;
     const title = document.getElementById('taskTitle').value; 
     const desc = document.getElementById('taskDesc').value;
-    const date = document.getElementById('dateInput').value;
+    const dateStart = document.getElementById('dateInputStart').value; // Feature 4
+    const dateEnd = document.getElementById('dateInputEnd').value;
     const area = document.getElementById('areaSelect').value;
     
     const resps = [];
@@ -129,20 +143,22 @@ async function saveDemand() {
         }
     });
 
-    if(!project || !title || resps.length === 0) {
-        alert("Erro: Projeto, Título e Responsável são obrigatórios.");
+    if(!project || !title || !dateStart || !dateEnd || resps.length === 0) {
+        alert("Erro: Projeto, Título, Responsável e Datas (Início e Fim) são obrigatórios.");
         return;
     }
 
     const taskData = {
-        project, text: title, descricao: desc, date: date || "Sem prazo",
-        area, resps, status: 'fazer', criadoEm: new Date(), historico: [],
+        project, text: title, descricao: desc, area, resps,
+        data_inicio: dateStart, data_fim: dateEnd, // Fundação para o BI
+        perc_desenvolvimento: 0, // Feature 3 inicial
+        status: 'fazer', criadoEm: new Date(), historico: [],
         email: resps[0].email 
     };
 
     await db.collection('tarefas').add(taskData);
     
-    alert("Salvando demanda e disparando notificações...");
+    alert("Salvando demanda e disparando notificações em fila sequencial...");
     for (const r of resps) {
         try {
             await emailjs.send("service_yw91uty", "template_p5wyzq8", {
@@ -168,8 +184,8 @@ function getVisibleTasks() {
     });
 }
 
-// O NOVO MOTOR DO FILTRO QUE NÃO APAGA SUA SELEÇÃO
-function updateProjectList(tasksToRender) {
+function updateProjectList() {
+    const tasksToRender = getVisibleTasks();
     const list = document.getElementById('projectsList');
     const filter = document.getElementById('filterProject');
     const projects = [...new Set(tasksToRender.map(t => t.project))].sort();
@@ -177,159 +193,50 @@ function updateProjectList(tasksToRender) {
     if(list) list.innerHTML = projects.map(p => `<option value="${p}">`).join('');
     
     if(filter) {
-        const currentSelection = filter.value; // Salva o que você clicou
+        const currentSelection = filter.value;
         let optionsHTML = '<option value="geral">Todos os Projetos</option>';
         projects.forEach(p => { optionsHTML += `<option value="${p}">${p}</option>`; });
         filter.innerHTML = optionsHTML;
-        
-        // Se o projeto que estava selecionado ainda existe, mantém ele.
-        if (currentSelection && projects.includes(currentSelection)) {
-            filter.value = currentSelection;
-        } else {
-            filter.value = 'geral';
-        }
+        if (currentSelection && projects.includes(currentSelection)) filter.value = currentSelection;
+        else filter.value = 'geral';
     }
 }
 
-// O MOTOR DO BUSINESS INTELLIGENCE
 function renderDashboard() {
     const visibleTasks = getVisibleTasks();
     const selected = document.getElementById('filterProject').value;
     const filtered = selected === 'geral' ? visibleTasks : visibleTasks.filter(t => t.project === selected);
     
-    // 1. CARDS DE KPI
     const stats = {
         total: filtered.length,
-        atrasadas: filtered.filter(t => t.status !== 'concluido' && t.status !== 'aprovacao' && t.date !== "Sem prazo" && new Date(t.date) < new Date()).length,
+        atrasadas: filtered.filter(t => t.status !== 'concluido' && t.status !== 'aprovacao' && t.data_fim && new Date(t.data_fim) < new Date()).length,
         pendentes: filtered.filter(t => t.status === 'aprovacao').length,
         concluidas: filtered.filter(t => t.status === 'concluido').length
     };
 
     document.getElementById('stats-grid').innerHTML = `
         <div class="stat-card"><h3>${stats.total}</h3><p>Total Delegado</p></div>
-        <div class="stat-card" style="color:#ef4444; border-bottom: 4px solid #ef4444;"><h3>${stats.atrasadas}</h3><p>Risco / Atraso</p></div>
-        <div class="stat-card" style="color:#3b82f6; border-bottom: 4px solid #3b82f6;"><h3>${stats.pendentes}</h3><p>Requer seu OK</p></div>
-        <div class="stat-card" style="color:#10b981; border-bottom: 4px solid #10b981;"><h3>${stats.total > 0 ? Math.round((stats.concluidas/stats.total)*100) : 0}%</h3><p>Saúde Global</p></div>
+        <div class="stat-card" style="color:red; border-bottom: 4px solid red;"><h3>${stats.atrasadas}</h3><p>Atrasadas</p></div>
+        <div class="stat-card" style="color:blue; border-bottom: 4px solid blue;"><h3>${stats.pendentes}</h3><p>Aguardando OK Gestor</p></div>
+        <div class="stat-card" style="color:green; border-bottom: 4px solid green;"><h3>${stats.concluidas}</h3><p>Concluídas</p></div>
     `;
 
-    // 2. RENDERIZA OS GRÁFICOS (PIZZA E BARRAS)
-    updateCharts(filtered);
-    
-    // 3. RENDERIZA SAÚDE DOS PROJETOS (Apenas visão geral)
-    renderProjectHealth(selected === 'geral' ? visibleTasks : filtered);
-    
-    // 4. RENDERIZA MATRIZ DE RISCO
-    renderRiskMatrix(filtered);
-    
-    // Se a tabela de tarefas de baixo precisar atualizar
-    renderBoard();
+    updateChart(filtered);
 }
 
-function updateCharts(tasks) {
-    // Matemática do Gráfico de Pizza
+function updateChart(tasks) {
     const s = { fazer: 0, andamento: 0, aprovacao: 0, concluido: 0 };
     tasks.forEach(t => s[t.status] = (s[t.status] || 0) + 1);
-    
+    const ctx = document.getElementById('mainChart').getContext('2d');
     if (chartInstance) chartInstance.destroy();
-    chartInstance = new Chart(document.getElementById('mainChart').getContext('2d'), {
+    chartInstance = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: ['Fazer', 'Andamento', 'Aguard. OK', 'Concluído'],
+            labels: ['Fazer', 'Andamento', 'OK Gestor', 'Concluído'],
             datasets: [{ data: [s.fazer, s.andamento, s.aprovacao, s.concluido], backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6', '#10b981'] }]
         },
         options: { plugins: { legend: { position: 'bottom' } } }
     });
-
-    // Matemática do Gráfico de Gargalo (A Fazer / Andamento por Usuário)
-    const userGargalo = {};
-    tasks.forEach(t => {
-        if(t.status === 'fazer' || t.status === 'andamento') {
-            const responsaveis = t.resps && t.resps.length > 0 ? t.resps : [{nome: "Sem Dono"}];
-            responsaveis.forEach(r => {
-                const nomeCurto = r.nome.split(' ')[0]; // Pega só o primeiro nome
-                userGargalo[nomeCurto] = (userGargalo[nomeCurto] || 0) + 1;
-            });
-        }
-    });
-
-    const labelsUser = Object.keys(userGargalo);
-    const dataUser = Object.values(userGargalo);
-
-    if (userBarChartInstance) userBarChartInstance.destroy();
-    userBarChartInstance = new Chart(document.getElementById('userBarChart').getContext('2d'), {
-        type: 'bar',
-        data: {
-            labels: labelsUser,
-            datasets: [{ label: 'Tarefas Pendentes', data: dataUser, backgroundColor: '#f59e0b', borderRadius: 4 }]
-        },
-        options: { scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
-    });
-}
-
-function renderProjectHealth(tasks) {
-    const board = document.getElementById('projectHealthBoard');
-    if(tasks.length === 0) { board.innerHTML = '<p style="color:#64748b;">Sem dados.</p>'; return; }
-
-    const projStats = {};
-    tasks.forEach(t => {
-        if(!projStats[t.project]) projStats[t.project] = { total: 0, concluidas: 0 };
-        projStats[t.project].total++;
-        if(t.status === 'concluido') projStats[t.project].concluidas++;
-    });
-
-    let html = '';
-    for (const [proj, data] of Object.entries(projStats)) {
-        const perc = Math.round((data.concluidas / data.total) * 100);
-        let color = perc < 40 ? '#ef4444' : (perc < 80 ? '#f59e0b' : '#10b981');
-        html += `
-            <div style="margin-bottom: 12px;">
-                <div style="display:flex; justify-content: space-between; font-size: 0.85rem; font-weight: bold; color: #334155; margin-bottom: 4px;">
-                    <span>${proj}</span> <span>${perc}% (${data.concluidas}/${data.total})</span>
-                </div>
-                <div style="background: #e2e8f0; height: 10px; border-radius: 5px; overflow: hidden;">
-                    <div style="background: ${color}; width: ${perc}%; height: 100%; transition: width 0.5s;"></div>
-                </div>
-            </div>
-        `;
-    }
-    board.innerHTML = html;
-}
-
-function renderRiskMatrix(tasks) {
-    const board = document.getElementById('riskMatrixBoard');
-    const today = new Date();
-    today.setHours(0,0,0,0);
-
-    const riscoAlto = tasks.filter(t => {
-        if(t.status === 'concluido' || t.status === 'aprovacao' || t.date === "Sem prazo") return false;
-        const taskDate = new Date(t.date);
-        // Filtra atrasadas ou que vencem em até 2 dias
-        const diffTime = taskDate - today;
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        return diffDays <= 2; 
-    }).sort((a, b) => new Date(a.date) - new Date(b.date)); // Ordena do mais atrasado para o mais recente
-
-    if(riscoAlto.length === 0) {
-        board.innerHTML = '<p style="color:#10b981; font-weight:bold;">Tudo sob controle. Nenhum atraso iminente.</p>';
-        return;
-    }
-
-    let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
-    riscoAlto.forEach(t => {
-        const nomeResp = t.resps && t.resps.length > 0 ? t.resps[0].nome.split(' ')[0] : "N/D";
-        const taskDate = new Date(t.date);
-        const isLate = taskDate < today;
-        const label = isLate ? `<span style="color:#ef4444; font-weight:bold;">Atrasado (${t.date})</span>` : `<span style="color:#f59e0b; font-weight:bold;">Vence em breve (${t.date})</span>`;
-        
-        html += `
-            <li style="border-bottom: 1px solid #fecaca; padding: 8px 0; font-size: 0.85rem;" onclick="abrirModal('${t.id}')" style="cursor:pointer;">
-                <strong>${t.text}</strong> <br>
-                👤 ${nomeResp} | ⏳ ${label}
-            </li>
-        `;
-    });
-    html += '</ul>';
-    board.innerHTML = html;
 }
 
 function renderBoard() {
@@ -339,7 +246,7 @@ function renderBoard() {
     const selected = document.getElementById('filterProject').value;
     const filtered = selected === 'geral' ? visibleTasks : visibleTasks.filter(t => t.project === selected);
 
-    if(filtered.length === 0) { board.innerHTML = '<p style="text-align:center; padding:20px;">Nenhuma tarefa encontrada para este filtro.</p>'; return; }
+    if(filtered.length === 0) { board.innerHTML = '<p style="text-align:center; padding:20px;">Nenhuma tarefa pendente.</p>'; return; }
 
     const grouped = filtered.reduce((acc, t) => {
         if (!acc[t.project]) acc[t.project] = [];
@@ -354,10 +261,17 @@ function renderBoard() {
         tasks.forEach(t => {
             const nomeResp = t.resps && t.resps.length > 0 ? t.resps.map(r => r.nome.split(' ')[0]).join(', ') : "Não atribuído";
             const statusColor = t.status === 'concluido' ? 'background:#10b981; color:white;' : (t.status === 'aprovacao' ? 'background:#3b82f6; color:white;' : 'background:#e2e8f0;');
+            const perc = t.perc_desenvolvimento || 0; // Feature 3
             
             html += `<div class="task-item" onclick="abrirModal('${t.id}')" style="cursor:pointer; padding:8px; border-bottom:1px solid #f1f5f9; display:flex; justify-content:space-between; align-items:center;">
-                <div><strong>${t.text}</strong> <small style="color:#64748b;">(${nomeResp})</small></div>
-                <span style="font-size:0.75rem; padding:4px 8px; border-radius:4px; font-weight:bold; ${statusColor}">${t.status.toUpperCase()}</span>
+                <div>
+                    <strong>${t.text}</strong> <small style="color:#64748b;">(${nomeResp})</small><br>
+                    <small style="color:#94a3b8;">📅 Fim: ${t.data_fim || t.date || "N/D"}</small>
+                </div>
+                <div style="text-align:right;">
+                    <span style="font-size:0.75rem; padding:4px 8px; border-radius:4px; font-weight:bold; ${statusColor}">${t.status.toUpperCase()}</span><br>
+                    <small style="font-weight:bold; color: ${statusColor === 'background:#10b981; color:white;' ? '#10b981' : '#475569'};">${perc}%</small>
+                </div>
             </div>`;
         });
         html += `</div>`;
@@ -365,7 +279,7 @@ function renderBoard() {
     }
 }
 
-// 5. MODAL DE GESTÃO
+// 6. MODAL DE GESTÃO (COM DATAS E PERCENTUAL)
 async function abrirModal(id) {
     currentTaskId = id;
     const t = allTasks.find(x => x.id === id);
@@ -375,10 +289,19 @@ async function abrirModal(id) {
     
     document.getElementById('editTitle').value = t.text;
     document.getElementById('editTitle').disabled = !isGestor;
-    document.getElementById('editDate').value = t.date !== "Sem prazo" ? t.date : "";
-    document.getElementById('editDate').disabled = !isGestor;
+    
+    // Feature 4: Datas Início e Fim no Modal
+    document.getElementById('editDateStart').value = t.data_inicio || "";
+    document.getElementById('editDateStart').disabled = !isGestor;
+    document.getElementById('editDateEnd').value = t.data_fim || t.date || ""; // Usa t.date como fallback legado
+    document.getElementById('editDateEnd').disabled = !isGestor;
+    
     document.getElementById('editDesc').value = t.descricao || "Sem escopo inicial.";
     document.getElementById('editDesc').disabled = !isGestor; 
+    
+    // Feature 3: Percentual de Desenvolvimento
+    document.getElementById('editPerc').value = t.perc_desenvolvimento || 0;
+    
     document.getElementById('newReport').value = ""; 
     
     const statusSelect = document.getElementById('editStatus');
@@ -388,10 +311,12 @@ async function abrirModal(id) {
     
     if (!isGestor && t.status === 'concluido') {
         statusSelect.disabled = true;
+        document.getElementById('editPerc').disabled = true;
         document.getElementById('newReport').disabled = true;
-        document.getElementById('newReport').placeholder = "Tarefa concluída. Apenas gestores podem reabrir.";
+        document.getElementById('newReport').placeholder = "Tarefa concluída. Bloqueada para executores.";
     } else {
         statusSelect.disabled = false;
+        document.getElementById('editPerc').disabled = false;
         document.getElementById('newReport').disabled = false;
         document.getElementById('newReport').placeholder = "Adicionar novo reporte...";
     }
@@ -420,11 +345,17 @@ async function saveModalChanges() {
     const isGestor = (currentUserRole === 'super-admin' || currentUserRole === 'gestor');
     const newReportText = document.getElementById('newReport').value.trim();
     const newStatus = document.getElementById('editStatus').value;
+    const newPerc = document.getElementById('editPerc').value; // Feature 3
     
-    const update = { status: newStatus };
+    const update = { 
+        status: newStatus, 
+        perc_desenvolvimento: parseInt(newPerc) || 0 
+    };
+
     if(isGestor) {
         update.text = document.getElementById('editTitle').value;
-        update.date = document.getElementById('editDate').value || "Sem prazo";
+        update.data_inicio = document.getElementById('editDateStart').value;
+        update.data_fim = document.getElementById('editDateEnd').value;
         update.descricao = document.getElementById('editDesc').value;
     }
 
@@ -432,10 +363,10 @@ async function saveModalChanges() {
         update.historico = firebase.firestore.FieldValue.arrayUnion({
             data: new Date().toLocaleString('pt-BR'), autor: currentUserEmail, texto: newReportText
         });
-    } else if (newStatus !== t.status) { 
+    } else if (newStatus !== t.status || parseInt(newPerc) !== t.perc_desenvolvimento) { 
         update.historico = firebase.firestore.FieldValue.arrayUnion({
             data: new Date().toLocaleString('pt-BR'), autor: "SISTEMA",
-            texto: `Mudou o status para [${newStatus.toUpperCase()}]`
+            texto: `Atualizou: Status para [${newStatus.toUpperCase()}] e Progresso para ${newPerc}%`
         });
     }
 
@@ -452,7 +383,7 @@ async function deleteTask() {
     }
 }
 
-// Adm Usuários
+// Adm Usuários (MANTIDO)
 async function cadastrarUsuario() {
     if(currentUserRole !== 'super-admin') return;
     const nome = document.getElementById('novoUserNome').value.trim();

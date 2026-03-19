@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Centro de Comando v5.0 - BI Integrado</title>
+    <title>Centro de Comando v5.0 - BI Corporativo</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
@@ -23,7 +23,7 @@
         <button id="login-btn" class="add-btn">Entrar com Google</button>
     </div>
 
-    <div id="app-screen" class="container" style="display: none; max-width: 1200px;">
+    <div id="app-screen" class="container" style="display: none; max-width: 1400px;">
         <header>
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <h2 id="saudacao">Olá, Paulo</h2>
@@ -31,14 +31,28 @@
             </div>
             <nav style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
                 <button onclick="showSection('novo-projeto')" id="btn-nav-novo" class="btn-nav" style="display:none;">➕ Novo Projeto</button>
-                <button onclick="showSection('acompanhamento')" class="btn-nav">📊 Painel Estratégico (BI)</button>
+                <button onclick="showSection('dashboard-bi')" class="btn-nav" style="background-color: #0f172a;">📊 Painel Corporativo (Live BI)</button>
+                <button onclick="showSection('acompanhamento')" class="btn-nav">📊 Visão Operacional (Tabelas)</button>
                 <button onclick="showSection('usuarios')" id="btn-nav-usuarios" class="btn-nav" style="display:none; background-color: #475569;">👥 Gestão de Equipe</button>
             </nav>
         </header>
 
+        <section id="sec-dashboard-bi" class="content-section" style="display: none; height: 100vh;">
+            <div class="input-section" style="height: 100%;">
+                <h3>Painel Corporativo Dynamic BI</h3>
+                <p style="color: #64748b; margin-bottom: 15px;">Abaixo está o BI profissional integrado. Use os filtros diretamente no relatório para drill-down e interatividade completa.</p>
+                <div id="bi-embed-container" style="width: 100%; height: 90%; background: #f1f5f9; border-radius: 8px; border: 2px dashed #cbd5e1; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #94a3b8; text-align: center; padding: 20px;">
+                    BI Corporativo<br>
+                    Configure a conexão Firebase > Looker Studio<br>
+                    e cole o link do iframe nas variáveis globais do script.
+                </div>
+            </div>
+        </section>
+
         <section id="sec-novo-projeto" class="content-section" style="display: none;">
             <div class="input-section">
                 <h3>Inclusão de Demanda Estratégica</h3>
+                
                 <label style="font-size: 0.85rem; font-weight: bold;">Área Estratégica:</label>
                 <div class="form-row">
                     <select id="areaSelect" style="width: 100%;">
@@ -56,9 +70,9 @@
                 </div>
 
                 <input type="text" id="taskTitle" placeholder="Título da Tarefa">
-                <textarea id="taskDesc" placeholder="Escopo original detalhado (Ficará travado para executores)..." rows="3"></textarea>
+                <textarea id="taskDesc" placeholder="Escopo original detalhado (Ficará travado)..." rows="3"></textarea>
                 
-                <label style="font-size: 0.85rem; font-weight: bold; margin-top:10px; display:block;">Designar Responsáveis:</label>
+                <label style="font-size: 0.85rem; font-weight: bold; margin-top:10px; display:block;">Designar Responsáveis (Selecionar da lista credenciada):</label>
                 <div id="responsaveis-container">
                     <div class="resp-row" style="display: flex; gap: 5px; margin-bottom: 5px;">
                         <select class="resp-select" style="width: 100%;">
@@ -66,45 +80,30 @@
                         </select>
                     </div>
                 </div>
-                <button onclick="addResponsavelField()" class="btn-small" style="margin: 10px 0;">+ Adicionar outro responsável</button>
+                <button onclick="addResponsavelField()" class="btn-small" style="margin: 10px 0;">+ Outro responsável</button>
                 
-                <div class="form-row">
-                    <input type="date" id="dateInput">
-                    <button onclick="saveDemand()" class="add-btn">Lançar Demanda</button>
+                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: bold; color:#475569;">Início da Atividade:</label>
+                        <input type="date" id="dateInputStart">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: bold; color:#475569;">Prazo Final:</label>
+                        <input type="date" id="dateInputEnd">
+                    </div>
                 </div>
+                <button onclick="saveDemand()" class="add-btn" style="width: 100%; margin-top: 20px;">Lançar Demanda Corporativa</button>
             </div>
         </section>
 
         <section id="sec-acompanhamento" class="content-section" style="display: none;">
-            <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
-                <h3 style="margin: 0; color: #1e293b;">Visão Executiva</h3>
-                <select id="filterProject" onchange="renderDashboard()" style="width: 300px; padding: 8px; border-radius: 4px; border: 1px solid #cbd5e1; font-weight: bold;"></select>
+            <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3>Visão Operacional de Tarefas</h3>
+                <select id="filterProject" onchange="renderDashboard()" style="width: 250px;"></select>
             </div>
             
-            <div id="stats-grid" class="stats-grid" style="margin-bottom: 20px;"></div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-                <div style="background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
-                    <h4 style="text-align: center; color: #475569; margin-bottom: 10px;">Distribuição de Status</h4>
-                    <div style="max-width: 250px; margin: auto;"><canvas id="mainChart"></canvas></div>
-                </div>
-                <div style="background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
-                    <h4 style="text-align: center; color: #475569; margin-bottom: 10px;">Gargalo por Executor (Pendências)</h4>
-                    <div style="max-width: 100%;"><canvas id="userBarChart"></canvas></div>
-                </div>
-            </div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                <div style="background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
-                    <h4 style="color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 15px;">📈 Saúde dos Projetos</h4>
-                    <div id="projectHealthBoard"></div>
-                </div>
-                
-                <div style="background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #ef4444; box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.1);">
-                    <h4 style="color: #ef4444; border-bottom: 2px solid #fca5a5; padding-bottom: 5px; margin-bottom: 15px;">🚨 Radar de Risco (Atrasos Críticos)</h4>
-                    <div id="riskMatrixBoard"></div>
-                </div>
-            </div>
+            <div id="stats-grid" class="stats-grid"></div>
+            <div style="max-width: 250px; margin: auto; display:none;"><canvas id="mainChart"></canvas></div>
         </section>
 
         <section id="sec-usuarios" class="content-section" style="display: none;">
@@ -112,7 +111,7 @@
                 <h3>Cadastrar Novo Membro na Equipe</h3>
                 <div class="form-row" style="display: flex; gap: 10px; flex-wrap: wrap;">
                     <input type="text" id="novoUserNome" placeholder="Nome Completo" style="flex: 1;">
-                    <input type="email" id="novoUserEmail" placeholder="E-mail do Google" style="flex: 2;">
+                    <input type="email" id="novoUserEmail" placeholder="E-mail Google" style="flex: 2;">
                     <select id="novoUserPapel" style="flex: 1;">
                         <option value="executor">Executor (Visualiza e relata)</option>
                         <option value="gestor">Gestor (Cria projetos e aprova)</option>
@@ -126,35 +125,50 @@
         </section>
 
         <hr style="margin: 30px 0;">
-        <h3 style="color: #1e293b; margin-bottom: 15px;">Quadro Operacional de Tarefas</h3>
         <div id="projectsBoard"></div>
     </div>
 
     <div id="taskModal" class="modal" style="display:none;">
-        <div class="modal-content">
-            <h3>Gestão da Tarefa</h3>
+        <div class="modal-content" style="max-width: 700px;">
+            <h3>Gestão da Tarefa Corporativa</h3>
             <label>Título:</label>
             <input type="text" id="editTitle">
             
             <label>Escopo Original (Não editável por executores):</label>
             <textarea id="editDesc" rows="3" style="background-color: #f8fafc;"></textarea>
             
-            <label>Prazo:</label>
-            <input type="date" id="editDate">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 10px 0;">
+                <div>
+                    <label style="font-size: 0.8rem; font-weight: bold; color:#475569;">Início da Atividade:</label>
+                    <input type="date" id="editDateStart">
+                </div>
+                <div>
+                    <label style="font-size: 0.8rem; font-weight: bold; color:#475569;">Prazo Final:</label>
+                    <input type="date" id="editDateEnd">
+                </div>
+            </div>
 
-            <label>Status Atual:</label>
-            <select id="editStatus">
-                <option value="fazer">A Fazer</option>
-                <option value="andamento">Em Andamento</option>
-                <option value="aprovacao">Aguardando OK Gestor</option>
-                <option value="concluido" id="opt-concluido" style="display:none; font-weight:bold; color:green;">Concluído (Apenas Gestor)</option>
-            </select>
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px; margin: 10px 0; align-items: end;">
+                <div>
+                    <label>Status Atual:</label>
+                    <select id="editStatus">
+                        <option value="fazer">A Fazer</option>
+                        <option value="andamento">Em Andamento</option>
+                        <option value="aprovacao">Aguardando OK Gestor</option>
+                        <option value="concluido" id="opt-concluido" style="display:none; font-weight:bold; color:green;">Concluído (Apenas Gestor)</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size: 0.8rem; font-weight: bold; color:#475569;">Desenvolvimento (%):</label>
+                    <input type="number" id="editPerc" min="0" max="100" step="5" placeholder="Ex: 50">
+                </div>
+            </div>
             
             <hr style="margin: 15px 0;">
-            <label style="font-weight:bold; color:#1e293b;">📌 Linha do Tempo / Reports:</label>
+            <label style="font-weight:bold; color:#1e293b;">📌 Linha do Tempo / Reports (Todos os envolvidos):</label>
             <div id="modalHistorico" style="max-height: 200px; overflow-y: auto; background: #f1f5f9; padding: 10px; border-radius: 4px; margin-bottom: 10px; font-size: 0.85rem; border: 1px solid #cbd5e1;"></div>
             
-            <textarea id="newReport" rows="2" placeholder="Adicionar novo reporte ou atualização (Ficará salvo no histórico)..."></textarea>
+            <textarea id="newReport" rows="2" placeholder="Adicionar novo reporte ou atualização (Autor e data serão salvos)..."></textarea>
             
             <div class="modal-actions" style="margin-top:15px;">
                 <button onclick="saveModalChanges()" class="add-btn">Salvar Alterações / Report</button>
