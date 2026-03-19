@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Centro de Comando v4.0 - Integrado</title>
+    <title>Centro de Comando v4.5 - Integrado</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
@@ -57,12 +57,14 @@
                 </div>
 
                 <input type="text" id="taskTitle" placeholder="Título da Tarefa">
-                <textarea id="taskDesc" placeholder="Descrição detalhada..." rows="3"></textarea>
+                <textarea id="taskDesc" placeholder="Escopo original detalhado (Ficará travado para executores)..." rows="3"></textarea>
                 
+                <label style="font-size: 0.85rem; font-weight: bold; margin-top:10px; display:block;">Designar Responsáveis:</label>
                 <div id="responsaveis-container">
                     <div class="resp-row" style="display: flex; gap: 5px; margin-bottom: 5px;">
-                        <input type="text" class="resp-name" placeholder="Nome Responsável">
-                        <input type="email" class="resp-email" placeholder="E-mail do Google">
+                        <select class="resp-select" style="width: 100%;">
+                            <option value="">Carregando equipe...</option>
+                        </select>
                     </div>
                 </div>
                 <button onclick="addResponsavelField()" class="btn-small" style="margin: 10px 0;">+ Adicionar outro responsável</button>
@@ -86,7 +88,7 @@
                 <h3>Cadastrar Novo Membro na Equipe</h3>
                 <div class="form-row" style="display: flex; gap: 10px; flex-wrap: wrap;">
                     <input type="text" id="novoUserNome" placeholder="Nome Completo" style="flex: 1;">
-                    <input type="email" id="novoUserEmail" placeholder="E-mail do Google (@gmail ou @grupointegrado)" style="flex: 2;">
+                    <input type="email" id="novoUserEmail" placeholder="E-mail do Google" style="flex: 2;">
                     <select id="novoUserPapel" style="flex: 1;">
                         <option value="executor">Executor (Visualiza e relata)</option>
                         <option value="gestor">Gestor (Cria projetos e aprova)</option>
@@ -109,23 +111,28 @@
             <label>Título:</label>
             <input type="text" id="editTitle">
             
-            <label>Descrição/Report:</label>
-            <textarea id="editDesc" rows="4"></textarea>
+            <label>Escopo Original (Não editável por executores):</label>
+            <textarea id="editDesc" rows="3" style="background-color: #f8fafc;"></textarea>
             
             <label>Prazo:</label>
             <input type="date" id="editDate">
 
-            <label>Status:</label>
+            <label>Status Atual:</label>
             <select id="editStatus">
                 <option value="fazer">A Fazer</option>
                 <option value="andamento">Em Andamento</option>
                 <option value="aprovacao">Aguardando OK Gestor</option>
+                <option value="concluido" id="opt-concluido" style="display:none; font-weight:bold; color:green;">Concluído (Apenas Gestor)</option>
             </select>
             
-            <div id="modalHistorico"></div>
+            <hr style="margin: 15px 0;">
+            <label style="font-weight:bold; color:#1e293b;">📌 Linha do Tempo / Reports:</label>
+            <div id="modalHistorico" style="max-height: 200px; overflow-y: auto; background: #f1f5f9; padding: 10px; border-radius: 4px; margin-bottom: 10px; font-size: 0.85rem; border: 1px solid #cbd5e1;"></div>
             
-            <div class="modal-actions">
-                <button onclick="saveModalChanges()" class="add-btn">Salvar Alterações</button>
+            <textarea id="newReport" rows="2" placeholder="Adicionar novo reporte ou atualização (Ficará salvo no histórico)..."></textarea>
+            
+            <div class="modal-actions" style="margin-top:15px;">
+                <button onclick="saveModalChanges()" class="add-btn">Salvar Alterações / Report</button>
                 <button onclick="deleteTask()" id="btn-delete-task" class="btn-delete">Excluir Demanda</button>
                 <button onclick="closeModal()" style="background:#666; color:white;">Fechar</button>
             </div>
