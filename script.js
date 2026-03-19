@@ -51,8 +51,19 @@ document.getElementById('login-btn').onclick = () => auth.signInWithPopup(new fi
 // BI
 function initializeBI() {
     const iframe = document.getElementById('bi-iframe');
-    if(iframe && iframe.src === "") iframe.src = LOOKER_STUDIO_EMBED_URL;
+    // Se o iframe existir e ainda estiver vazio, injeta a URL
+    if(iframe && (iframe.src === "" || iframe.src === window.location.href)) {
+        console.log("Iniciando carregamento do BI...");
+        iframe.src = LOOKER_STUDIO_EMBED_URL;
+    }
 }
+
+// Forçar carregamento inicial assim que o script rodar
+window.onload = () => {
+    if(document.getElementById('sec-dashboard-bi').classList.contains('active')) {
+        initializeBI();
+    }
+};
 
 // DADOS
 function loadData() {
