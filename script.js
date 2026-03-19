@@ -1,23 +1,3 @@
-// ==========================================================================
-// 1. CONFIGURAÇÃO E INICIALIZAÇÃO
-// ==========================================================================
-const firebaseConfig = {
-    apiKey: "AIzaSyC4utmTe19lRJdOJutVmJAdhkfeu4znkpI",
-    authDomain: "centrodecomando-paulo.firebaseapp.com",
-    projectId: "centrodecomando-paulo",
-    storageBucket: "centrodecomando-paulo.firebasestorage.app",
-    messagingSenderId: "949266387673",
-    appId: "1:949266387673:web:1ca08986cac568a76f64c8",
-    measurementId: "G-QE62CLW6GS"
-};
-
-if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-}
-const db = firebase.firestore();
-const auth = firebase.auth();
-
-// URL DO BI (LOOKER STUDIO)
 const LOOKER_STUDIO_EMBED_URL = "https://lookerstudio.google.com/embed/reporting/ed770545-0285-4838-8911-3c3bf86123b2/page/JZjsF"; 
 
 let allTasks = [];
