@@ -3,181 +3,224 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Centro de Comando v5.0 - BI Corporativo</title>
+    <title>Centro de Comando | Gestão de Alta Performance</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap" rel="stylesheet">
+    
     <link rel="stylesheet" href="style.css">
+
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     <script type="text/javascript">
         (function() {
-            emailjs.init("avO3v8VXJm6ZQyZ9a");
+            emailjs.init("avO3v8VXJm6ZQyZ9a"); // Seu ID EmailJS mantido
         })();
     </script>
 </head>
 <body>
-    <div id="login-screen" class="container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh;">
-        <h1>Centro de Comando - Integrado</h1>
-        <button id="login-btn" class="add-btn">Entrar com Google</button>
+
+    <div id="login-screen" class="auth-container">
+        <div class="auth-box shadow">
+            <h1 class="logo">Centro de <span class="bold">Comando</span></h1>
+            <p>Acesse a plataforma estratégica</p>
+            <button id="login-btn" class="btn-primary" style="width: 100%; margin-top: 20px;">Entrar com conta Google</button>
+        </div>
     </div>
 
-    <div id="app-screen" class="container" style="display: none; max-width: 1400px;">
-        <header>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h2 id="saudacao">Olá, Paulo</h2>
-                <button onclick="logout()" class="btn-delete">Sair</button>
+    <div id="app-screen" style="display: none;">
+        
+        <header class="main-header">
+            <div class="header-container">
+                <h1 class="logo">Centro de <span class="bold">Comando</span></h1>
+                <div class="user-control">
+                    <span id="saudacao" class="user-email">Olá, Paulo</span>
+                    <button onclick="logout()" class="btn-secondary">Sair</button>
+                </div>
             </div>
-            <nav style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
-                <button onclick="showSection('novo-projeto')" id="btn-nav-novo" class="btn-nav" style="display:none;">➕ Novo Projeto</button>
-                <button onclick="showSection('dashboard-bi')" class="btn-nav" style="background-color: #0f172a;">📊 Painel Corporativo (Live BI)</button>
-                <button onclick="showSection('acompanhamento')" class="btn-nav">📊 Visão Operacional (Tabelas)</button>
-                <button onclick="showSection('usuarios')" id="btn-nav-usuarios" class="btn-nav" style="display:none; background-color: #475569;">👥 Gestão de Equipe</button>
-            </nav>
         </header>
 
-        <section id="sec-dashboard-bi" class="content-section" style="display: none; height: 100vh;">
-            <div class="input-section" style="height: 100%;">
-                <h3>Painel Corporativo Dynamic BI</h3>
-                <p style="color: #64748b; margin-bottom: 15px;">Abaixo está o BI profissional integrado. Use os filtros diretamente no relatório para drill-down e interatividade completa.</p>
-                <div id="bi-embed-container" style="width: 100%; height: 90%; background: #f1f5f9; border-radius: 8px; border: 2px dashed #cbd5e1; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #94a3b8; text-align: center; padding: 20px;">
-                    BI Corporativo<br>
-                    Configure a conexão Firebase > Looker Studio<br>
-                    e cole o link do iframe nas variáveis globais do script.
-                </div>
+        <nav class="main-nav">
+            <div class="nav-container">
+                <button onclick="showSection('dashboard-bi')" id="btn-nav-bi" class="nav-link active">Live BI</button>
+                <button onclick="showSection('acompanhamento')" id="btn-nav-op" class="nav-link">Operacional</button>
+                <button onclick="showSection('usuarios')" id="btn-nav-usuarios" class="nav-link" style="display:none;">Equipe</button>
+                <button onclick="showSection('novo-projeto')" id="btn-nav-novo" class="btn-primary" style="display:none; margin-left: auto;">Novo Projeto</button>
             </div>
-        </section>
+        </nav>
 
-        <section id="sec-novo-projeto" class="content-section" style="display: none;">
-            <div class="input-section">
-                <h3>Inclusão de Demanda Estratégica</h3>
-                
-                <label style="font-size: 0.85rem; font-weight: bold;">Área Estratégica:</label>
-                <div class="form-row">
-                    <select id="areaSelect" style="width: 100%;">
-                        <option value="Coordenação">Coordenação</option>
-                        <option value="Docência">Docência</option>
-                        <option value="DEA">DEA</option>
-                        <option value="Pessoal">Pessoal</option>
-                    </select>
+        <main class="main-content">
+            
+            <section id="sec-dashboard-bi" class="content-section active">
+                <div class="section-header">
+                    <h2>Business Intelligence</h2>
                 </div>
-
-                <label style="font-size: 0.85rem; font-weight: bold;">Projeto (Selecione ou digite um novo):</label>
-                <div class="form-row">
-                    <input type="text" id="projectInput" list="projectsList" placeholder="Ex: C.A.F.E. 2026" style="width: 100%;">
-                    <datalist id="projectsList"></datalist>
+                <div class="iframe-container shadow">
+                    <iframe id="bi-iframe" src="" frameborder="0" allowfullscreen></iframe>
                 </div>
+            </section>
 
-                <input type="text" id="taskTitle" placeholder="Título da Tarefa">
-                <textarea id="taskDesc" placeholder="Escopo original detalhado (Ficará travado)..." rows="3"></textarea>
-                
-                <label style="font-size: 0.85rem; font-weight: bold; margin-top:10px; display:block;">Designar Responsáveis (Selecionar da lista credenciada):</label>
-                <div id="responsaveis-container">
-                    <div class="resp-row" style="display: flex; gap: 5px; margin-bottom: 5px;">
-                        <select class="resp-select" style="width: 100%;">
-                            <option value="">Carregando equipe...</option>
+            <section id="sec-novo-projeto" class="content-section">
+                <div class="form-container shadow">
+                    <h3>Inclusão de Demanda</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Área Estratégica</label>
+                            <select id="areaSelect">
+                                <option value="Coordenação">Coordenação</option>
+                                <option value="Docência">Docência</option>
+                                <option value="DEA">DEA</option>
+                                <option value="Pessoal">Pessoal</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Projeto</label>
+                            <input type="text" id="projectInput" list="projectsList" placeholder="Ex: C.A.F.E. 2026">
+                            <datalist id="projectsList"></datalist>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Título da Tarefa</label>
+                        <input type="text" id="taskTitle">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Escopo Detalhado</label>
+                        <textarea id="taskDesc" rows="3"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Responsáveis Designados</label>
+                        <div id="responsaveis-container">
+                            <div class="resp-row">
+                                <select class="resp-select">
+                                    <option value="">Carregando equipe...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button onclick="addResponsavelField()" class="btn-text">+ Adicionar Responsável</button>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Início</label>
+                            <input type="date" id="dateInputStart">
+                        </div>
+                        <div class="form-group">
+                            <label>Prazo Final</label>
+                            <input type="date" id="dateInputEnd">
+                        </div>
+                    </div>
+
+                    <button onclick="saveDemand()" class="btn-primary" style="width: 100%; margin-top: 30px;">Lançar Demanda Corporativa</button>
+                </div>
+            </section>
+
+            <section id="sec-acompanhamento" class="content-section">
+                <div class="section-header">
+                    <h2>Visão Operacional</h2>
+                    <select id="filterProject" onchange="renderDashboard()" class="select-filter"></select>
+                </div>
+                <div id="stats-grid" class="stats-grid"></div>
+                <div id="projectsBoard" class="table-container shadow"></div>
+            </section>
+
+            <section id="sec-usuarios" class="content-section">
+                <div class="form-container shadow">
+                    <h3>Credenciar Membro</h3>
+                    <div class="form-grid">
+                        <input type="text" id="novoUserNome" placeholder="Nome Completo">
+                        <input type="email" id="novoUserEmail" placeholder="E-mail Google">
+                        <select id="novoUserPapel">
+                            <option value="executor">Executor</option>
+                            <option value="gestor">Gestor</option>
                         </select>
                     </div>
+                    <button onclick="cadastrarUsuario()" class="btn-primary" style="margin-top: 20px;">Liberar Acesso</button>
                 </div>
-                <button onclick="addResponsavelField()" class="btn-small" style="margin: 10px 0;">+ Outro responsável</button>
-                
-                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
-                    <div>
-                        <label style="font-size: 0.8rem; font-weight: bold; color:#475569;">Início da Atividade:</label>
-                        <input type="date" id="dateInputStart">
-                    </div>
-                    <div>
-                        <label style="font-size: 0.8rem; font-weight: bold; color:#475569;">Prazo Final:</label>
-                        <input type="date" id="dateInputEnd">
-                    </div>
-                </div>
-                <button onclick="saveDemand()" class="add-btn" style="width: 100%; margin-top: 20px;">Lançar Demanda Corporativa</button>
-            </div>
-        </section>
+                <h3 style="margin-top: 40px;">Equipe Ativa</h3>
+                <div id="lista-usuarios-board" class="team-grid"></div>
+            </section>
 
-        <section id="sec-acompanhamento" class="content-section" style="display: none;">
-            <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3>Visão Operacional de Tarefas</h3>
-                <select id="filterProject" onchange="renderDashboard()" style="width: 250px;"></select>
-            </div>
-            
-            <div id="stats-grid" class="stats-grid"></div>
-            <div style="max-width: 250px; margin: auto; display:none;"><canvas id="mainChart"></canvas></div>
-        </section>
-
-        <section id="sec-usuarios" class="content-section" style="display: none;">
-            <div class="input-section">
-                <h3>Cadastrar Novo Membro na Equipe</h3>
-                <div class="form-row" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <input type="text" id="novoUserNome" placeholder="Nome Completo" style="flex: 1;">
-                    <input type="email" id="novoUserEmail" placeholder="E-mail Google" style="flex: 2;">
-                    <select id="novoUserPapel" style="flex: 1;">
-                        <option value="executor">Executor (Visualiza e relata)</option>
-                        <option value="gestor">Gestor (Cria projetos e aprova)</option>
-                    </select>
-                </div>
-                <button onclick="cadastrarUsuario()" class="add-btn" style="margin-top: 10px;">Liberar Acesso</button>
-            </div>
-            <hr>
-            <h3>Equipe Credenciada</h3>
-            <div id="lista-usuarios-board" style="margin-top: 15px;"></div>
-        </section>
-
-        <hr style="margin: 30px 0;">
-        <div id="projectsBoard"></div>
+        </main>
     </div>
 
-    <div id="taskModal" class="modal" style="display:none;">
-        <div class="modal-content" style="max-width: 700px;">
-            <h3>Gestão da Tarefa Corporativa</h3>
-            <label>Título:</label>
-            <input type="text" id="editTitle">
+    <div id="taskModal" class="modal">
+        <div class="modal-content shadow">
+            <div class="modal-header">
+                <h3>Gestão da Demanda</h3>
+                <button onclick="closeModal()" class="close-btn">&times;</button>
+            </div>
             
-            <label>Escopo Original (Não editável por executores):</label>
-            <textarea id="editDesc" rows="3" style="background-color: #f8fafc;"></textarea>
-            
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 10px 0;">
-                <div>
-                    <label style="font-size: 0.8rem; font-weight: bold; color:#475569;">Início da Atividade:</label>
+            <div class="form-group">
+                <label>Título</label>
+                <input type="text" id="editTitle">
+            </div>
+
+            <div class="form-group">
+                <label>Escopo Original</label>
+                <textarea id="editDesc" rows="3" readonly class="readonly-field"></textarea>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Início</label>
                     <input type="date" id="editDateStart">
                 </div>
-                <div>
-                    <label style="font-size: 0.8rem; font-weight: bold; color:#475569;">Prazo Final:</label>
+                <div class="form-group">
+                    <label>Prazo</label>
                     <input type="date" id="editDateEnd">
                 </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px; margin: 10px 0; align-items: end;">
-                <div>
-                    <label>Status Atual:</label>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Status</label>
                     <select id="editStatus">
                         <option value="fazer">A Fazer</option>
                         <option value="andamento">Em Andamento</option>
                         <option value="aprovacao">Aguardando OK Gestor</option>
-                        <option value="concluido" id="opt-concluido" style="display:none; font-weight:bold; color:green;">Concluído (Apenas Gestor)</option>
+                        <option value="concluido" id="opt-concluido" style="display:none;">Concluído</option>
                     </select>
                 </div>
-                <div>
-                    <label style="font-size: 0.8rem; font-weight: bold; color:#475569;">Desenvolvimento (%):</label>
-                    <input type="number" id="editPerc" min="0" max="100" step="5" placeholder="Ex: 50">
+                <div class="form-group">
+                    <label>Progresso (%)</label>
+                    <input type="number" id="editPerc" min="0" max="100" step="5">
                 </div>
             </div>
-            
-            <hr style="margin: 15px 0;">
-            <label style="font-weight:bold; color:#1e293b;">📌 Linha do Tempo / Reports (Todos os envolvidos):</label>
-            <div id="modalHistorico" style="max-height: 200px; overflow-y: auto; background: #f1f5f9; padding: 10px; border-radius: 4px; margin-bottom: 10px; font-size: 0.85rem; border: 1px solid #cbd5e1;"></div>
-            
-            <textarea id="newReport" rows="2" placeholder="Adicionar novo reporte ou atualização (Autor e data serão salvos)..."></textarea>
-            
-            <div class="modal-actions" style="margin-top:15px;">
-                <button onclick="saveModalChanges()" class="add-btn">Salvar Alterações / Report</button>
-                <button onclick="deleteTask()" id="btn-delete-task" class="btn-delete">Excluir Demanda</button>
-                <button onclick="closeModal()" style="background:#666; color:white;">Fechar</button>
+
+            <div class="history-section">
+                <label>Linha do Tempo / Reports</label>
+                <div id="modalHistorico" class="history-box"></div>
+                <textarea id="newReport" rows="2" placeholder="Descreva o avanço ou impedimento..."></textarea>
+            </div>
+
+            <div class="modal-footer">
+                <button onclick="saveModalChanges()" class="btn-primary">Salvar Atualização</button>
+                <button onclick="deleteTask()" id="btn-delete-task" class="btn-danger">Excluir Demanda</button>
             </div>
         </div>
     </div>
 
+    <script>
+        const firebaseConfig = {
+            apiKey: "COLE_AQUI",
+            authDomain: "COLE_AQUI",
+            projectId: "COLE_AQUI",
+            storageBucket: "COLE_AQUI",
+            messagingSenderId: "COLE_AQUI",
+            appId: "COLE_AQUI"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+    </script>
+    
     <script src="script.js"></script>
 </body>
 </html>
