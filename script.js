@@ -228,4 +228,61 @@ function renderBoard() {
             <h4 style="background:#1e293b; color:white; padding:8px; border-radius:4px; margin-bottom:10px;">📁 ${proj}</h4>`;
         
         tasks.forEach(t => {
-            const
+            const nomeResp = t.resps && t.resps.length > 0 ? t.resps[0].nome : (t.responsavel || "Não atribuído");
+            html += `<div class="task-item" onclick="abrirModal('${t.id}')" style="cursor:pointer; padding:8px; border-bottom:1px solid #f1f5f9;">
+                <strong>${t.text}</strong> <small style="color:#64748b;">(${nomeResp})</small>
+                <span style="float:right; font-size:0.8rem; background:#e2e8f0; padding:4px 8px; border-radius:4px; font-weight:bold;">${t.status.toUpperCase()}</span>
+            </div>`;
+        });
+        
+        html += `</div>`;
+        board.innerHTML += html;
+    }
+}
+
+// 7. MODAL DE GESTÃO E EXCLUSÃO (BLOQUEIO DE BOTÕES POR PAPEL)
+async function abrirModal(id) {
+    currentTaskId = id;
+    const t = allTasks.find(x => x.id === id);
+    document.getElementById('taskModal').style.display = 'block';
+    document.getElementById('editTitle').value = t.text;
+    document.getElementById('editDesc').value = t.descricao || "";
+    document.getElementById('editDate').value = t.date !== "Sem prazo" ? t.date : "";
+    document.getElementById('editStatus').value = t.status;
+    document.getElementById('modalHistorico').innerHTML = (t.historico || []).map(h => `<div>[${h.data}] ${h.texto}</div>`).join('');
+    
+    // Oculta o botão de excluir se for um mero executor
+    const btnExcluir = document.querySelector('button[onclick="deleteTask()"]');
+    if (btnExcluir) {
+        btnExcluir.style.display = (currentUserRole === 'super-admin' || currentUserRole === 'gestor') ? 'inline-block' : 'none';
+    }
+}
+
+function closeModal() { document.getElementById('taskModal').style.display = 'none'; }
+
+async function saveModalChanges() {
+    const update = {
+        text: document.getElementById('editTitle').value,
+        descricao: document.getElementById('editDesc').value,
+        date: document.getElementById('editDate').value || "Sem prazo",
+        status: document.getElementById('editStatus').value,
+        historico: firebase.firestore.FieldValue.arrayUnion({ 
+            data: new Date().toLocaleDateString(), 
+            texto: `Alterado por ${currentUserEmail}` 
+        })
+    };
+    await db.collection('tarefas').doc(currentTaskId).update(update);
+    alert("Tarefa atualizada!");
+    closeModal();
+}
+
+async function deleteTask() {
+    // Trava de segurança no backend-side (script)
+    if(currentUserRole !== 'super-admin' && currentUserRole !== 'gestor') return; 
+
+    if(confirm("Deseja realmente EXCLUIR esta demanda? Esta ação é irreversível.")) {
+        await db.collection('tarefas').doc(currentTaskId).delete();
+        alert("Demanda excluída.");
+        closeModal();
+    }
+}
