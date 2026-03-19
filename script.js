@@ -9,19 +9,18 @@ const firebaseConfig = {
     measurementId: "G-QE62CLW6GS"
 };
 
-// 2. CONTROLE DE AUTORIDADE (GESTORES)
-// Coloque aqui os e-mails de quem pode CRIAR e VER TUDO. O resto será participante.
-const MANAGERS = ["paulohenriquesrodrigues@gmail.com"]; 
-
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
+
+// VARIÁVEIS GLOBAIS DA OBRA
 let allTasks = [];
 let chartInstance = null;
 let currentTaskId = null;
-let currentUserEmail = null; // Guarda o e-mail do usuário logado
+let currentUserEmail = null; 
+let currentUserRole = null; // Guarda o crachá do usuário (super-admin, gestor, executor)
 
-// 3. NAVEGAÇÃO E UI
+// 2. NAVEGAÇÃO E UI
 function showSection(sec) {
     document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
     document.getElementById(`sec-${sec}`).style.display = 'block';
@@ -32,55 +31,80 @@ function addResponsavelField() {
     const div = document.createElement('div');
     div.className = 'resp-row';
     div.style = "display: flex; gap: 5px; margin-bottom: 5px;";
-    div.innerHTML = `<input type="text" class="resp-name" placeholder="Nome"><input type="email" class="resp-email" placeholder="E-mail">`;
+    div.innerHTML = `<input type="text" class="resp-name" placeholder="Nome Responsável"><input type="email" class="resp-email" placeholder="E-mail">`;
     container.appendChild(div);
 }
 
-// 4. AUTENTICAÇÃO E PERMISSÕES
-auth.onAuthStateChanged(user => {
+// 3. A TRAVA DA PORTA (AUTH GUARD COM RBAC)
+auth.onAuthStateChanged(async user => {
     if (user) {
         currentUserEmail = user.email.toLowerCase();
-        const isManager = MANAGERS.includes(currentUserEmail);
+        
+        try {
+            // Bate no Firebase: "Esse e-mail está na lista de convidados autorizados?"
+            const userQuery = await db.collection('usuarios').where('email', '==', currentUserEmail).get();
+            
+            if (userQuery.empty) {
+                // Não tem cadastro. Expulsa.
+                alert("Acesso Negado: Você não faz parte desta equipe ou não foi cadastrado pelo Coordenador.");
+                auth.signOut();
+                return;
+            }
 
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('app-screen').style.display = 'block';
-        document.getElementById('saudacao').innerText = `Olá, ${user.displayName || 'Paulo'}`;
-        
-        // Esconde o botão de "Novo Projeto" se não for gestor
-        const btnNovo = document.querySelector('button[onclick="showSection(\'novo-projeto\')"]');
-        if(btnNovo) btnNovo.style.display = isManager ? 'inline-block' : 'none';
-        
-        // Força ir para a tela de acompanhamento ao logar
-        showSection('acompanhamento');
-        loadData();
+            // Tem cadastro. Lê o papel.
+            const userData = userQuery.docs[0].data();
+            currentUserRole = userData.papel;
+
+            // Libera a interface básica
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('app-screen').style.display = 'block';
+            document.getElementById('saudacao').innerText = `Olá, ${userData.nome || 'Usuário'} (${currentUserRole.toUpperCase()})`;
+            
+            // Controle Básico de Visão: Só admin e gestor criam projetos
+            const btnNovo = document.querySelector('button[onclick="showSection(\'novo-projeto\')"]');
+            if(btnNovo) {
+                btnNovo.style.display = (currentUserRole === 'super-admin' || currentUserRole === 'gestor') ? 'inline-block' : 'none';
+            }
+            
+            showSection('acompanhamento');
+            loadData();
+            
+        } catch (error) {
+            console.error("Erro na catraca de segurança:", error);
+            alert("Erro ao validar credenciais. Contate o suporte.");
+            auth.signOut();
+        }
     } else {
+        // Ninguém logado
         document.getElementById('login-screen').style.display = 'flex';
         document.getElementById('app-screen').style.display = 'none';
+        currentUserEmail = null;
+        currentUserRole = null;
     }
 });
 
 document.getElementById('login-btn').onclick = () => auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
 function logout() { auth.signOut(); }
 
-// 5. CARREGAMENTO DE DADOS
+// 4. CARREGAMENTO DE DADOS E FILTROS DINÂMICOS
 function loadData() {
     db.collection('tarefas').onSnapshot(snapshot => {
         allTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        renderBoard();
         renderDashboard();
+        renderBoard();
     });
 }
 
-// Função auxiliar para filtrar o que o usuário pode ver
+// Filtra o que o usuário logado tem permissão para ver
 function getVisibleTasks() {
-    if (MANAGERS.includes(currentUserEmail)) return allTasks; // Gestor vê tudo
+    if (currentUserRole === 'super-admin' || currentUserRole === 'gestor') return allTasks; // Alta patente vê tudo
     
-    // Participante vê só o que é dele
+    // Executor vê só o que foi delegado a ele
     return allTasks.filter(t => {
         if (t.resps && t.resps.length > 0) {
             return t.resps.some(r => r.email === currentUserEmail);
         }
-        return t.email === currentUserEmail; // Garantia para tarefas antigas
+        return t.email === currentUserEmail; // Garantia para tarefas do formato antigo
     });
 }
 
@@ -96,8 +120,14 @@ function updateProjectList(tasksToRender) {
     }
 }
 
-// 6. SALVAR DEMANDA (MANTIDO INTACTO)
+// 5. SALVAR DEMANDA E DISPARAR E-MAIL (EMAILJS MANTIDO INTACTO)
 async function saveDemand() {
+    // Bloqueio extra no motor (caso o executor burle o visual)
+    if (currentUserRole !== 'super-admin' && currentUserRole !== 'gestor') {
+        alert("Ação não permitida: Apenas gestores podem criar demandas.");
+        return;
+    }
+
     const project = document.getElementById('projectInput').value;
     const title = document.getElementById('taskTitle').value; 
     const desc = document.getElementById('taskDesc').value;
@@ -123,7 +153,7 @@ async function saveDemand() {
     await db.collection('tarefas').add(taskData);
     
     resps.forEach(r => {
-        emailjs.send("service_yw91uty", "template_p5wyzq8", { // Suas chaves originais
+        emailjs.send("service_yw91uty", "template_p5wyzq8", {
             responsavel: r.nome,
             projeto: project,
             email_to: r.email 
@@ -131,13 +161,13 @@ async function saveDemand() {
           .catch(err => console.error("Erro no e-mail", err));
     });
 
-    alert("Demanda lançada e e-mail enviado!");
+    alert("Demanda lançada e equipe notificada!");
     document.getElementById('taskTitle').value = "";
     document.getElementById('taskDesc').value = "";
     showSection('acompanhamento');
 }
 
-// 7. DASHBOARD E QUADRO (AGORA FILTRADOS)
+// 6. DASHBOARD E QUADRO DE TAREFAS (COM VISÃO FILTRADA)
 function renderDashboard() {
     const visibleTasks = getVisibleTasks();
     updateProjectList(visibleTasks);
@@ -149,7 +179,7 @@ function renderDashboard() {
         total: filtered.length,
         atrasadas: filtered.filter(t => t.status !== 'aprovacao' && t.date !== "Sem prazo" && new Date(t.date) < new Date()).length,
         pendentes: filtered.filter(t => t.status === 'aprovacao').length,
-        concluidas: filtered.filter(t => t.status === 'aprovacao').length
+        concluidas: filtered.filter(t => t.status === 'aprovacao').length // Na Fase 3 separaremos pendente de concluída real
     };
 
     document.getElementById('stats-grid').innerHTML = `
@@ -180,10 +210,10 @@ function renderBoard() {
     const board = document.getElementById('projectsBoard');
     board.innerHTML = '';
     
-    const visibleTasks = getVisibleTasks(); // O pulo do gato está aqui
+    const visibleTasks = getVisibleTasks();
 
     if(visibleTasks.length === 0) {
-        board.innerHTML = '<p style="text-align:center; padding:20px;">Você não possui tarefas pendentes no momento.</p>';
+        board.innerHTML = '<p style="text-align:center; padding:20px; color:#64748b;">Você não possui tarefas designadas ou visíveis no momento.</p>';
         return;
     }
 
@@ -194,63 +224,8 @@ function renderBoard() {
     }, {});
 
     for (const [proj, tasks] of Object.entries(grouped)) {
-        let html = `<div class="project-card" style="margin-bottom:15px; border:1px solid #ddd; padding:10px; border-radius:8px;">
+        let html = `<div class="project-card" style="margin-bottom:15px; border:1px solid #e2e8f0; padding:10px; border-radius:8px; background:#fff;">
             <h4 style="background:#1e293b; color:white; padding:8px; border-radius:4px; margin-bottom:10px;">📁 ${proj}</h4>`;
         
         tasks.forEach(t => {
-            const nomeResp = t.resps && t.resps.length > 0 ? t.resps[0].nome : (t.responsavel || "Não atribuído");
-            html += `<div class="task-item" onclick="abrirModal('${t.id}')" style="cursor:pointer; padding:8px; border-bottom:1px solid #eee;">
-                <strong>${t.text}</strong> <small>(${nomeResp})</small>
-                <span style="float:right; font-size:0.8rem; background:#e2e8f0; padding:2px 6px; border-radius:4px;">${t.status.toUpperCase()}</span>
-            </div>`;
-        });
-        
-        html += `</div>`;
-        board.innerHTML += html;
-    }
-}
-
-// 8. MODAL DE GESTÃO E EXCLUSÃO
-async function abrirModal(id) {
-    currentTaskId = id;
-    const t = allTasks.find(x => x.id === id);
-    document.getElementById('taskModal').style.display = 'block';
-    document.getElementById('editTitle').value = t.text;
-    document.getElementById('editDesc').value = t.descricao || "";
-    document.getElementById('editDate').value = t.date !== "Sem prazo" ? t.date : "";
-    document.getElementById('editStatus').value = t.status;
-    document.getElementById('modalHistorico').innerHTML = (t.historico || []).map(h => `<div>[${h.data}] ${h.texto}</div>`).join('');
-    
-    // Proteção: Somente o gestor pode ver o botão de excluir
-    const btnExcluir = document.querySelector('button[onclick="deleteTask()"]');
-    if (btnExcluir) {
-        btnExcluir.style.display = MANAGERS.includes(currentUserEmail) ? 'inline-block' : 'none';
-    }
-}
-
-function closeModal() { document.getElementById('taskModal').style.display = 'none'; }
-
-async function saveModalChanges() {
-    const update = {
-        text: document.getElementById('editTitle').value,
-        descricao: document.getElementById('editDesc').value,
-        date: document.getElementById('editDate').value || "Sem prazo",
-        status: document.getElementById('editStatus').value,
-        historico: firebase.firestore.FieldValue.arrayUnion({ 
-            data: new Date().toLocaleDateString(), 
-            texto: `Alterado por ${currentUserEmail}` 
-        })
-    };
-    await db.collection('tarefas').doc(currentTaskId).update(update);
-    alert("Tarefa atualizada!");
-    closeModal();
-}
-
-async function deleteTask() {
-    if(!MANAGERS.includes(currentUserEmail)) return; // Trava de segurança extra
-    if(confirm("Deseja realmente EXCLUIR esta demanda? Esta ação é irreversível.")) {
-        await db.collection('tarefas').doc(currentTaskId).delete();
-        alert("Demanda excluída.");
-        closeModal();
-    }
-}
+            const
