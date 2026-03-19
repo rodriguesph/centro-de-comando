@@ -14,7 +14,7 @@ const db = firebase.firestore();
 const auth = firebase.auth();
 
 // PAULO: Após configurar o Looker Studio, cole a URL do iframe aqui entre aspas.
-const LOOKER_STUDIO_EMBED_URL = ""; 
+const LOOKER_STUDIO_EMBED_URL = "https://lookerstudio.google.com/embed/reporting/ed770545-0285-4838-8911-3c3bf86123b2/page/JZjsF"; 
 
 let allTasks = [];
 let allUsers = []; 
