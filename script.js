@@ -9,14 +9,19 @@ const firebaseConfig = {
     measurementId: "G-QE62CLW6GS"
 };
 
+// 2. CONTROLE DE AUTORIDADE (GESTORES)
+// Coloque aqui os e-mails de quem pode CRIAR e VER TUDO. O resto será participante.
+const MANAGERS = ["paulohenriquesrodrigues@gmail.com"]; 
+
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
 let allTasks = [];
 let chartInstance = null;
 let currentTaskId = null;
+let currentUserEmail = null; // Guarda o e-mail do usuário logado
 
-// 2. NAVEGAÇÃO E UI
+// 3. NAVEGAÇÃO E UI
 function showSection(sec) {
     document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
     document.getElementById(`sec-${sec}`).style.display = 'block';
@@ -31,12 +36,22 @@ function addResponsavelField() {
     container.appendChild(div);
 }
 
-// 3. AUTENTICAÇÃO
+// 4. AUTENTICAÇÃO E PERMISSÕES
 auth.onAuthStateChanged(user => {
     if (user) {
+        currentUserEmail = user.email.toLowerCase();
+        const isManager = MANAGERS.includes(currentUserEmail);
+
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('app-screen').style.display = 'block';
         document.getElementById('saudacao').innerText = `Olá, ${user.displayName || 'Paulo'}`;
+        
+        // Esconde o botão de "Novo Projeto" se não for gestor
+        const btnNovo = document.querySelector('button[onclick="showSection(\'novo-projeto\')"]');
+        if(btnNovo) btnNovo.style.display = isManager ? 'inline-block' : 'none';
+        
+        // Força ir para a tela de acompanhamento ao logar
+        showSection('acompanhamento');
         loadData();
     } else {
         document.getElementById('login-screen').style.display = 'flex';
@@ -47,25 +62,41 @@ auth.onAuthStateChanged(user => {
 document.getElementById('login-btn').onclick = () => auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
 function logout() { auth.signOut(); }
 
-// 4. CARREGAMENTO DE DADOS
+// 5. CARREGAMENTO DE DADOS
 function loadData() {
     db.collection('tarefas').onSnapshot(snapshot => {
         allTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        updateProjectList();
         renderBoard();
         renderDashboard();
     });
 }
 
-function updateProjectList() {
-    const list = document.getElementById('projectsList');
-    const filter = document.getElementById('filterProject');
-    const projects = [...new Set(allTasks.map(t => t.project))];
-    list.innerHTML = projects.map(p => `<option value="${p}">`).join('');
-    filter.innerHTML = '<option value="geral">Visão Geral</option>' + projects.map(p => `<option value="${p}">${p}</option>`).join('');
+// Função auxiliar para filtrar o que o usuário pode ver
+function getVisibleTasks() {
+    if (MANAGERS.includes(currentUserEmail)) return allTasks; // Gestor vê tudo
+    
+    // Participante vê só o que é dele
+    return allTasks.filter(t => {
+        if (t.resps && t.resps.length > 0) {
+            return t.resps.some(r => r.email === currentUserEmail);
+        }
+        return t.email === currentUserEmail; // Garantia para tarefas antigas
+    });
 }
 
-// 5. SALVAR DEMANDA E DISPARAR E-MAIL (EMAILJS)
+function updateProjectList(tasksToRender) {
+    const list = document.getElementById('projectsList');
+    const filter = document.getElementById('filterProject');
+    const projects = [...new Set(tasksToRender.map(t => t.project))];
+    
+    if(list) list.innerHTML = projects.map(p => `<option value="${p}">`).join('');
+    
+    if(filter) {
+        filter.innerHTML = '<option value="geral">Visão Geral</option>' + projects.map(p => `<option value="${p}">${p}</option>`).join('');
+    }
+}
+
+// 6. SALVAR DEMANDA (MANTIDO INTACTO)
 async function saveDemand() {
     const project = document.getElementById('projectInput').value;
     const title = document.getElementById('taskTitle').value; 
@@ -89,12 +120,10 @@ async function saveDemand() {
         email: resps[0].email
     };
 
-    // Salva no Banco de Dados
     await db.collection('tarefas').add(taskData);
     
-    // Dispara o E-mail via EmailJS (CORRIGIDO: COM ASPAS E SINTAXE FECHADA)
     resps.forEach(r => {
-        emailjs.send("service_yw91uty", "template_p5wyzq8", {
+        emailjs.send("service_yw91uty", "template_p5wyzq8", { // Suas chaves originais
             responsavel: r.nome,
             projeto: project,
             email_to: r.email 
@@ -108,10 +137,13 @@ async function saveDemand() {
     showSection('acompanhamento');
 }
 
-// 6. DASHBOARD E QUADRO DE TAREFAS
+// 7. DASHBOARD E QUADRO (AGORA FILTRADOS)
 function renderDashboard() {
+    const visibleTasks = getVisibleTasks();
+    updateProjectList(visibleTasks);
+
     const selected = document.getElementById('filterProject').value;
-    const filtered = selected === 'geral' ? allTasks : allTasks.filter(t => t.project === selected);
+    const filtered = selected === 'geral' ? visibleTasks : visibleTasks.filter(t => t.project === selected);
     
     const stats = {
         total: filtered.length,
@@ -147,7 +179,15 @@ function updateChart(tasks) {
 function renderBoard() {
     const board = document.getElementById('projectsBoard');
     board.innerHTML = '';
-    const grouped = allTasks.reduce((acc, t) => {
+    
+    const visibleTasks = getVisibleTasks(); // O pulo do gato está aqui
+
+    if(visibleTasks.length === 0) {
+        board.innerHTML = '<p style="text-align:center; padding:20px;">Você não possui tarefas pendentes no momento.</p>';
+        return;
+    }
+
+    const grouped = visibleTasks.reduce((acc, t) => {
         if (!acc[t.project]) acc[t.project] = [];
         acc[t.project].push(t);
         return acc;
@@ -158,9 +198,7 @@ function renderBoard() {
             <h4 style="background:#1e293b; color:white; padding:8px; border-radius:4px; margin-bottom:10px;">📁 ${proj}</h4>`;
         
         tasks.forEach(t => {
-            // Blindagem contra dados antigos
             const nomeResp = t.resps && t.resps.length > 0 ? t.resps[0].nome : (t.responsavel || "Não atribuído");
-            
             html += `<div class="task-item" onclick="abrirModal('${t.id}')" style="cursor:pointer; padding:8px; border-bottom:1px solid #eee;">
                 <strong>${t.text}</strong> <small>(${nomeResp})</small>
                 <span style="float:right; font-size:0.8rem; background:#e2e8f0; padding:2px 6px; border-radius:4px;">${t.status.toUpperCase()}</span>
@@ -172,7 +210,7 @@ function renderBoard() {
     }
 }
 
-// 7. MODAL DE GESTÃO E EXCLUSÃO
+// 8. MODAL DE GESTÃO E EXCLUSÃO
 async function abrirModal(id) {
     currentTaskId = id;
     const t = allTasks.find(x => x.id === id);
@@ -182,6 +220,12 @@ async function abrirModal(id) {
     document.getElementById('editDate').value = t.date !== "Sem prazo" ? t.date : "";
     document.getElementById('editStatus').value = t.status;
     document.getElementById('modalHistorico').innerHTML = (t.historico || []).map(h => `<div>[${h.data}] ${h.texto}</div>`).join('');
+    
+    // Proteção: Somente o gestor pode ver o botão de excluir
+    const btnExcluir = document.querySelector('button[onclick="deleteTask()"]');
+    if (btnExcluir) {
+        btnExcluir.style.display = MANAGERS.includes(currentUserEmail) ? 'inline-block' : 'none';
+    }
 }
 
 function closeModal() { document.getElementById('taskModal').style.display = 'none'; }
@@ -192,7 +236,10 @@ async function saveModalChanges() {
         descricao: document.getElementById('editDesc').value,
         date: document.getElementById('editDate').value || "Sem prazo",
         status: document.getElementById('editStatus').value,
-        historico: firebase.firestore.FieldValue.arrayUnion({ data: new Date().toLocaleDateString(), texto: "Alterado pelo Gestor" })
+        historico: firebase.firestore.FieldValue.arrayUnion({ 
+            data: new Date().toLocaleDateString(), 
+            texto: `Alterado por ${currentUserEmail}` 
+        })
     };
     await db.collection('tarefas').doc(currentTaskId).update(update);
     alert("Tarefa atualizada!");
@@ -200,6 +247,7 @@ async function saveModalChanges() {
 }
 
 async function deleteTask() {
+    if(!MANAGERS.includes(currentUserEmail)) return; // Trava de segurança extra
     if(confirm("Deseja realmente EXCLUIR esta demanda? Esta ação é irreversível.")) {
         await db.collection('tarefas').doc(currentTaskId).delete();
         alert("Demanda excluída.");
