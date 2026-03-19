@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Centro de Comando v3.5 - Gestão de Mim</title>
+    <title>Centro de Comando v4.0 - Integrado</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
@@ -29,9 +29,10 @@
                 <h2 id="saudacao">Olá, Paulo</h2>
                 <button onclick="logout()" class="btn-delete">Sair</button>
             </div>
-            <nav style="margin-top: 15px; display: flex; gap: 10px;">
-                <button onclick="showSection('novo-projeto')" class="btn-nav">➕ Novo Projeto / Demanda</button>
-                <button onclick="showSection('acompanhamento')" class="btn-nav">📊 Acompanhe seus Projetos</button>
+            <nav style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <button onclick="showSection('novo-projeto')" id="btn-nav-novo" class="btn-nav" style="display:none;">➕ Novo Projeto / Demanda</button>
+                <button onclick="showSection('acompanhamento')" class="btn-nav">📊 Acompanhamento</button>
+                <button onclick="showSection('usuarios')" id="btn-nav-usuarios" class="btn-nav" style="display:none; background-color: #475569;">👥 Gestão de Equipe</button>
             </nav>
         </header>
 
@@ -61,7 +62,7 @@
                 <div id="responsaveis-container">
                     <div class="resp-row" style="display: flex; gap: 5px; margin-bottom: 5px;">
                         <input type="text" class="resp-name" placeholder="Nome Responsável">
-                        <input type="email" class="resp-email" placeholder="E-mail">
+                        <input type="email" class="resp-email" placeholder="E-mail do Google">
                     </div>
                 </div>
                 <button onclick="addResponsavelField()" class="btn-small" style="margin: 10px 0;">+ Adicionar outro responsável</button>
@@ -78,6 +79,24 @@
             <div id="stats-grid" class="stats-grid"></div>
             <div id="riscos-alerta" class="alert-box" style="display: none;"></div>
             <div style="max-width: 250px; margin: auto;"><canvas id="mainChart"></canvas></div>
+        </section>
+
+        <section id="sec-usuarios" class="content-section" style="display: none;">
+            <div class="input-section">
+                <h3>Cadastrar Novo Membro na Equipe</h3>
+                <div class="form-row" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <input type="text" id="novoUserNome" placeholder="Nome Completo" style="flex: 1;">
+                    <input type="email" id="novoUserEmail" placeholder="E-mail do Google (@gmail ou @grupointegrado)" style="flex: 2;">
+                    <select id="novoUserPapel" style="flex: 1;">
+                        <option value="executor">Executor (Visualiza e relata)</option>
+                        <option value="gestor">Gestor (Cria projetos e aprova)</option>
+                    </select>
+                </div>
+                <button onclick="cadastrarUsuario()" class="add-btn" style="margin-top: 10px;">Liberar Acesso</button>
+            </div>
+            <hr>
+            <h3>Equipe Credenciada</h3>
+            <div id="lista-usuarios-board" style="margin-top: 15px;"></div>
         </section>
 
         <hr>
@@ -107,7 +126,7 @@
             
             <div class="modal-actions">
                 <button onclick="saveModalChanges()" class="add-btn">Salvar Alterações</button>
-                <button onclick="deleteTask()" class="btn-delete">Excluir Demanda</button>
+                <button onclick="deleteTask()" id="btn-delete-task" class="btn-delete">Excluir Demanda</button>
                 <button onclick="closeModal()" style="background:#666; color:white;">Fechar</button>
             </div>
         </div>

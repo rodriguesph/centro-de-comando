@@ -13,17 +13,19 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
 
-// VARIÁVEIS GLOBAIS DA OBRA
+// VARIÁVEIS GLOBAIS
 let allTasks = [];
+let allUsers = []; // Guarda a lista de usuários da equipe
 let chartInstance = null;
 let currentTaskId = null;
 let currentUserEmail = null; 
-let currentUserRole = null; // Guarda o crachá do usuário (super-admin, gestor, executor)
+let currentUserRole = null; 
 
 // 2. NAVEGAÇÃO E UI
 function showSection(sec) {
     document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
     document.getElementById(`sec-${sec}`).style.display = 'block';
+    if(sec === 'usuarios') renderUsers(); // Renderiza a lista se abrir a aba de usuários
 }
 
 function addResponsavelField() {
@@ -41,33 +43,35 @@ auth.onAuthStateChanged(async user => {
         currentUserEmail = user.email.toLowerCase();
         
         try {
-            // Bate no Firebase: "Esse e-mail está na lista de convidados autorizados?"
             const userQuery = await db.collection('usuarios').where('email', '==', currentUserEmail).get();
             
             if (userQuery.empty) {
-                // Não tem cadastro. Expulsa.
                 alert("Acesso Negado: Você não faz parte desta equipe ou não foi cadastrado pelo Coordenador.");
                 auth.signOut();
                 return;
             }
 
-            // Tem cadastro. Lê o papel.
             const userData = userQuery.docs[0].data();
             currentUserRole = userData.papel;
 
-            // Libera a interface básica
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-screen').style.display = 'block';
             document.getElementById('saudacao').innerText = `Olá, ${userData.nome || 'Usuário'} (${currentUserRole.toUpperCase()})`;
             
-            // Controle Básico de Visão: Só admin e gestor criam projetos
-            const btnNovo = document.querySelector('button[onclick="showSection(\'novo-projeto\')"]');
-            if(btnNovo) {
-                btnNovo.style.display = (currentUserRole === 'super-admin' || currentUserRole === 'gestor') ? 'inline-block' : 'none';
-            }
+            // Controle de Botões do Menu
+            const btnNovo = document.getElementById('btn-nav-novo');
+            const btnUsuarios = document.getElementById('btn-nav-usuarios');
+            
+            if(btnNovo) btnNovo.style.display = (currentUserRole === 'super-admin' || currentUserRole === 'gestor') ? 'inline-block' : 'none';
+            if(btnUsuarios) btnUsuarios.style.display = (currentUserRole === 'super-admin') ? 'inline-block' : 'none';
             
             showSection('acompanhamento');
             loadData();
+            
+            // Se for super-admin, já escuta a tabela de usuários
+            if(currentUserRole === 'super-admin') {
+                loadUsersDatabase();
+            }
             
         } catch (error) {
             console.error("Erro na catraca de segurança:", error);
@@ -75,7 +79,6 @@ auth.onAuthStateChanged(async user => {
             auth.signOut();
         }
     } else {
-        // Ninguém logado
         document.getElementById('login-screen').style.display = 'flex';
         document.getElementById('app-screen').style.display = 'none';
         currentUserEmail = null;
@@ -86,7 +89,7 @@ auth.onAuthStateChanged(async user => {
 document.getElementById('login-btn').onclick = () => auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
 function logout() { auth.signOut(); }
 
-// 4. CARREGAMENTO DE DADOS E FILTROS DINÂMICOS
+// 4. CARREGAMENTO DE DADOS (TAREFAS E USUÁRIOS)
 function loadData() {
     db.collection('tarefas').onSnapshot(snapshot => {
         allTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -95,16 +98,79 @@ function loadData() {
     });
 }
 
-// Filtra o que o usuário logado tem permissão para ver
-function getVisibleTasks() {
-    if (currentUserRole === 'super-admin' || currentUserRole === 'gestor') return allTasks; // Alta patente vê tudo
-    
-    // Executor vê só o que foi delegado a ele
-    return allTasks.filter(t => {
-        if (t.resps && t.resps.length > 0) {
-            return t.resps.some(r => r.email === currentUserEmail);
+function loadUsersDatabase() {
+    db.collection('usuarios').onSnapshot(snapshot => {
+        allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        if(document.getElementById('sec-usuarios').style.display === 'block') {
+            renderUsers();
         }
-        return t.email === currentUserEmail; // Garantia para tarefas do formato antigo
+    });
+}
+
+// 5. MÓDULO DE GESTÃO DE EQUIPE (SUPER-ADMIN)
+async function cadastrarUsuario() {
+    if(currentUserRole !== 'super-admin') return;
+
+    const nome = document.getElementById('novoUserNome').value.trim();
+    const email = document.getElementById('novoUserEmail').value.toLowerCase().trim();
+    const papel = document.getElementById('novoUserPapel').value;
+
+    if(!nome || !email) {
+        alert("Preencha Nome e E-mail para cadastrar.");
+        return;
+    }
+
+    // Verifica se já existe
+    const duplicado = allUsers.find(u => u.email === email);
+    if(duplicado) {
+        alert("Este e-mail já possui acesso cadastrado no sistema.");
+        return;
+    }
+
+    await db.collection('usuarios').add({ nome, email, papel });
+    alert("Usuário adicionado com sucesso!");
+    document.getElementById('novoUserNome').value = "";
+    document.getElementById('novoUserEmail').value = "";
+}
+
+async function removerUsuario(id, email) {
+    if(currentUserRole !== 'super-admin') return;
+    if(email === currentUserEmail) {
+        alert("Ação negada: Você não pode excluir a si mesmo.");
+        return;
+    }
+
+    if(confirm(`Tem certeza que deseja REVOGAR O ACESSO de ${email}?`)) {
+        await db.collection('usuarios').doc(id).delete();
+        alert("Acesso revogado.");
+    }
+}
+
+function renderUsers() {
+    const board = document.getElementById('lista-usuarios-board');
+    if(!board) return;
+    board.innerHTML = '';
+
+    allUsers.forEach(u => {
+        const div = document.createElement('div');
+        div.style = "display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #ddd; background: #f8fafc; border-radius: 4px; margin-bottom: 5px;";
+        div.innerHTML = `
+            <div>
+                <strong>${u.nome}</strong> <br>
+                <small style="color: #64748b;">${u.email} | Nível: <span style="font-weight:bold; color: ${u.papel === 'super-admin' ? 'red' : (u.papel === 'gestor' ? 'orange' : 'green')}">${u.papel.toUpperCase()}</span></small>
+            </div>
+            ${u.email !== currentUserEmail ? `<button onclick="removerUsuario('${u.id}', '${u.email}')" class="btn-small" style="background:#ef4444;">Remover</button>` : '<span>(Você)</span>'}
+        `;
+        board.appendChild(div);
+    });
+}
+
+// 6. REGRAS DE VISUALIZAÇÃO DE TAREFAS
+function getVisibleTasks() {
+    if (currentUserRole === 'super-admin' || currentUserRole === 'gestor') return allTasks; 
+    return allTasks.filter(t => {
+        if (t.resps && t.resps.length > 0) return t.resps.some(r => r.email === currentUserEmail);
+        return t.email === currentUserEmail; 
     });
 }
 
@@ -112,21 +178,13 @@ function updateProjectList(tasksToRender) {
     const list = document.getElementById('projectsList');
     const filter = document.getElementById('filterProject');
     const projects = [...new Set(tasksToRender.map(t => t.project))];
-    
     if(list) list.innerHTML = projects.map(p => `<option value="${p}">`).join('');
-    
-    if(filter) {
-        filter.innerHTML = '<option value="geral">Visão Geral</option>' + projects.map(p => `<option value="${p}">${p}</option>`).join('');
-    }
+    if(filter) filter.innerHTML = '<option value="geral">Visão Geral</option>' + projects.map(p => `<option value="${p}">${p}</option>`).join('');
 }
 
-// 5. SALVAR DEMANDA E DISPARAR E-MAIL (EMAILJS MANTIDO INTACTO)
+// 7. SALVAR DEMANDA (EMAILJS)
 async function saveDemand() {
-    // Bloqueio extra no motor (caso o executor burle o visual)
-    if (currentUserRole !== 'super-admin' && currentUserRole !== 'gestor') {
-        alert("Ação não permitida: Apenas gestores podem criar demandas.");
-        return;
-    }
+    if (currentUserRole !== 'super-admin' && currentUserRole !== 'gestor') return;
 
     const project = document.getElementById('projectInput').value;
     const title = document.getElementById('taskTitle').value; 
@@ -167,7 +225,7 @@ async function saveDemand() {
     showSection('acompanhamento');
 }
 
-// 6. DASHBOARD E QUADRO DE TAREFAS (COM VISÃO FILTRADA)
+// 8. DASHBOARD E QUADRO DE TAREFAS
 function renderDashboard() {
     const visibleTasks = getVisibleTasks();
     updateProjectList(visibleTasks);
@@ -179,7 +237,7 @@ function renderDashboard() {
         total: filtered.length,
         atrasadas: filtered.filter(t => t.status !== 'aprovacao' && t.date !== "Sem prazo" && new Date(t.date) < new Date()).length,
         pendentes: filtered.filter(t => t.status === 'aprovacao').length,
-        concluidas: filtered.filter(t => t.status === 'aprovacao').length // Na Fase 3 separaremos pendente de concluída real
+        concluidas: filtered.filter(t => t.status === 'aprovacao').length
     };
 
     document.getElementById('stats-grid').innerHTML = `
@@ -240,44 +298,58 @@ function renderBoard() {
     }
 }
 
-// 7. MODAL DE GESTÃO E EXCLUSÃO (BLOQUEIO DE BOTÕES POR PAPEL)
+// 9. MODAL DE GESTÃO (COM TRAVAS DE BOTÃO)
 async function abrirModal(id) {
     currentTaskId = id;
     const t = allTasks.find(x => x.id === id);
     document.getElementById('taskModal').style.display = 'block';
+    
+    // Executor não edita Título e Prazo, só vê
+    const isGestor = (currentUserRole === 'super-admin' || currentUserRole === 'gestor');
     document.getElementById('editTitle').value = t.text;
-    document.getElementById('editDesc').value = t.descricao || "";
+    document.getElementById('editTitle').disabled = !isGestor;
+    
     document.getElementById('editDate').value = t.date !== "Sem prazo" ? t.date : "";
+    document.getElementById('editDate').disabled = !isGestor;
+    
+    // Qualquer um pode reportar/mudar status
+    document.getElementById('editDesc').value = t.descricao || "";
     document.getElementById('editStatus').value = t.status;
     document.getElementById('modalHistorico').innerHTML = (t.historico || []).map(h => `<div>[${h.data}] ${h.texto}</div>`).join('');
     
-    // Oculta o botão de excluir se for um mero executor
-    const btnExcluir = document.querySelector('button[onclick="deleteTask()"]');
+    // Botão de Excluir só para Gestores
+    const btnExcluir = document.getElementById('btn-delete-task');
     if (btnExcluir) {
-        btnExcluir.style.display = (currentUserRole === 'super-admin' || currentUserRole === 'gestor') ? 'inline-block' : 'none';
+        btnExcluir.style.display = isGestor ? 'inline-block' : 'none';
     }
 }
 
 function closeModal() { document.getElementById('taskModal').style.display = 'none'; }
 
 async function saveModalChanges() {
+    const isGestor = (currentUserRole === 'super-admin' || currentUserRole === 'gestor');
+    
+    // Executor só atualiza descricao, status e historico. Gestor atualiza tudo.
     const update = {
-        text: document.getElementById('editTitle').value,
         descricao: document.getElementById('editDesc').value,
-        date: document.getElementById('editDate').value || "Sem prazo",
         status: document.getElementById('editStatus').value,
         historico: firebase.firestore.FieldValue.arrayUnion({ 
             data: new Date().toLocaleDateString(), 
             texto: `Alterado por ${currentUserEmail}` 
         })
     };
+
+    if(isGestor) {
+        update.text = document.getElementById('editTitle').value;
+        update.date = document.getElementById('editDate').value || "Sem prazo";
+    }
+
     await db.collection('tarefas').doc(currentTaskId).update(update);
     alert("Tarefa atualizada!");
     closeModal();
 }
 
 async function deleteTask() {
-    // Trava de segurança no backend-side (script)
     if(currentUserRole !== 'super-admin' && currentUserRole !== 'gestor') return; 
 
     if(confirm("Deseja realmente EXCLUIR esta demanda? Esta ação é irreversível.")) {
