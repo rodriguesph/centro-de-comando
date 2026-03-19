@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Centro de Comando | Gestão de Alta Performance</title>
+    <title>Centro de Comando | Gestão Estratégica</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,7 +18,7 @@
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     <script type="text/javascript">
         (function() {
-            emailjs.init("avO3v8VXJm6ZQyZ9a"); // Seu ID EmailJS mantido
+            emailjs.init("avO3v8VXJm6ZQyZ9a");
         })();
     </script>
 </head>
@@ -26,19 +26,18 @@
 
     <div id="login-screen" class="auth-container">
         <div class="auth-box shadow">
-            <h1 class="logo">Centro de <span class="bold">Comando</span></h1>
+            <h1 class="logo">CENTRO DE <span class="bold">COMANDO</span></h1>
             <p>Acesse a plataforma estratégica</p>
-            <button id="login-btn" class="btn-primary" style="width: 100%; margin-top: 20px;">Entrar com conta Google</button>
+            <button id="login-btn" class="btn-primary" style="width: 100%; margin-top: 20px;">ENTRAR COM CONTA GOOGLE</button>
         </div>
     </div>
 
     <div id="app-screen" style="display: none;">
-        
         <header class="main-header">
             <div class="header-container">
-                <h1 class="logo">Centro de <span class="bold">Comando</span></h1>
+                <h1 class="logo">CENTRO DE <span class="bold">COMANDO</span></h1>
                 <div class="user-control">
-                    <span id="saudacao" class="user-email">Olá, Paulo</span>
+                    <span id="saudacao" class="user-email">Autenticando...</span>
                     <button onclick="logout()" class="btn-secondary">Sair</button>
                 </div>
             </div>
@@ -46,15 +45,14 @@
 
         <nav class="main-nav">
             <div class="nav-container">
-                <button onclick="showSection('dashboard-bi')" id="btn-nav-bi" class="nav-link active">Live BI</button>
-                <button onclick="showSection('acompanhamento')" id="btn-nav-op" class="nav-link">Operacional</button>
-                <button onclick="showSection('usuarios')" id="btn-nav-usuarios" class="nav-link" style="display:none;">Equipe</button>
-                <button onclick="showSection('novo-projeto')" id="btn-nav-novo" class="btn-primary" style="display:none; margin-left: auto;">Novo Projeto</button>
+                <button onclick="showSection('dashboard-bi')" id="btn-nav-bi" class="nav-link active">LIVE BI</button>
+                <button onclick="showSection('acompanhamento')" id="btn-nav-op" class="nav-link">OPERACIONAL</button>
+                <button onclick="showSection('usuarios')" id="btn-nav-usuarios" class="nav-link" style="display:none;">EQUIPE</button>
+                <button onclick="showSection('novo-projeto')" id="btn-nav-novo" class="btn-primary" style="display:none; margin-left: auto;">NOVO PROJETO</button>
             </div>
         </nav>
 
         <main class="main-content">
-            
             <section id="sec-dashboard-bi" class="content-section active">
                 <div class="section-header">
                     <h2>Business Intelligence</h2>
@@ -83,48 +81,33 @@
                             <datalist id="projectsList"></datalist>
                         </div>
                     </div>
-
                     <div class="form-group">
                         <label>Título da Tarefa</label>
                         <input type="text" id="taskTitle">
                     </div>
-
                     <div class="form-group">
                         <label>Escopo Detalhado</label>
                         <textarea id="taskDesc" rows="3"></textarea>
                     </div>
-
                     <div class="form-group">
-                        <label>Responsáveis Designados</label>
+                        <label>Responsáveis</label>
                         <div id="responsaveis-container">
-                            <div class="resp-row">
-                                <select class="resp-select">
-                                    <option value="">Carregando equipe...</option>
-                                </select>
-                            </div>
+                            <div class="resp-row"><select class="resp-select"><option value="">Carregando...</option></select></div>
                         </div>
                         <button onclick="addResponsavelField()" class="btn-text">+ Adicionar Responsável</button>
                     </div>
-
                     <div class="form-grid">
-                        <div class="form-group">
-                            <label>Início</label>
-                            <input type="date" id="dateInputStart">
-                        </div>
-                        <div class="form-group">
-                            <label>Prazo Final</label>
-                            <input type="date" id="dateInputEnd">
-                        </div>
+                        <div class="form-group"><label>Início</label><input type="date" id="dateInputStart"></div>
+                        <div class="form-group"><label>Prazo Final</label><input type="date" id="dateInputEnd"></div>
                     </div>
-
-                    <button onclick="saveDemand()" class="btn-primary" style="width: 100%; margin-top: 30px;">Lançar Demanda Corporativa</button>
+                    <button onclick="saveDemand()" class="btn-primary" style="width: 100%; margin-top: 20px;">LANÇAR DEMANDA</button>
                 </div>
             </section>
 
             <section id="sec-acompanhamento" class="content-section">
                 <div class="section-header">
                     <h2>Visão Operacional</h2>
-                    <select id="filterProject" onchange="renderDashboard()" class="select-filter"></select>
+                    <select id="filterProject" onchange="renderDashboard()" class="select-filter" style="width: 250px; padding: 8px;"></select>
                 </div>
                 <div id="stats-grid" class="stats-grid"></div>
                 <div id="projectsBoard" class="table-container shadow"></div>
@@ -132,7 +115,7 @@
 
             <section id="sec-usuarios" class="content-section">
                 <div class="form-container shadow">
-                    <h3>Credenciar Membro</h3>
+                    <h3>Credenciar Novo Membro</h3>
                     <div class="form-grid">
                         <input type="text" id="novoUserNome" placeholder="Nome Completo">
                         <input type="email" id="novoUserEmail" placeholder="E-mail Google">
@@ -141,12 +124,11 @@
                             <option value="gestor">Gestor</option>
                         </select>
                     </div>
-                    <button onclick="cadastrarUsuario()" class="btn-primary" style="margin-top: 20px;">Liberar Acesso</button>
+                    <button onclick="cadastrarUsuario()" class="btn-primary" style="margin-top: 10px;">LIBERAR ACESSO</button>
                 </div>
-                <h3 style="margin-top: 40px;">Equipe Ativa</h3>
-                <div id="lista-usuarios-board" class="team-grid"></div>
+                <h3 style="margin-top: 40px;">Membros Ativos</h3>
+                <div id="lista-usuarios-board"></div>
             </section>
-
         </main>
     </div>
 
@@ -156,28 +138,12 @@
                 <h3>Gestão da Demanda</h3>
                 <button onclick="closeModal()" class="close-btn">&times;</button>
             </div>
-            
-            <div class="form-group">
-                <label>Título</label>
-                <input type="text" id="editTitle">
-            </div>
-
-            <div class="form-group">
-                <label>Escopo Original</label>
-                <textarea id="editDesc" rows="3" readonly class="readonly-field"></textarea>
-            </div>
-
+            <div class="form-group"><label>Título</label><input type="text" id="editTitle"></div>
+            <div class="form-group"><label>Escopo Original</label><textarea id="editDesc" rows="3" readonly class="readonly-field"></textarea></div>
             <div class="form-grid">
-                <div class="form-group">
-                    <label>Início</label>
-                    <input type="date" id="editDateStart">
-                </div>
-                <div class="form-group">
-                    <label>Prazo</label>
-                    <input type="date" id="editDateEnd">
-                </div>
+                <div class="form-group"><label>Início</label><input type="date" id="editDateStart"></div>
+                <div class="form-group"><label>Prazo</label><input type="date" id="editDateEnd"></div>
             </div>
-
             <div class="form-grid">
                 <div class="form-group">
                     <label>Status</label>
@@ -188,21 +154,16 @@
                         <option value="concluido" id="opt-concluido" style="display:none;">Concluído</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label>Progresso (%)</label>
-                    <input type="number" id="editPerc" min="0" max="100" step="5">
-                </div>
+                <div class="form-group"><label>Progresso (%)</label><input type="number" id="editPerc" min="0" max="100" step="5"></div>
             </div>
-
             <div class="history-section">
                 <label>Linha do Tempo / Reports</label>
                 <div id="modalHistorico" class="history-box"></div>
-                <textarea id="newReport" rows="2" placeholder="Descreva o avanço ou impedimento..."></textarea>
+                <textarea id="newReport" rows="2" placeholder="Adicionar reporte..."></textarea>
             </div>
-
             <div class="modal-footer">
-                <button onclick="saveModalChanges()" class="btn-primary">Salvar Atualização</button>
-                <button onclick="deleteTask()" id="btn-delete-task" class="btn-danger">Excluir Demanda</button>
+                <button onclick="saveModalChanges()" class="btn-primary">SALVAR ATUALIZAÇÃO</button>
+                <button onclick="deleteTask()" id="btn-delete-task" class="btn-danger">EXCLUIR DEMANDA</button>
             </div>
         </div>
     </div>
@@ -221,7 +182,6 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
     </script>
-    
     <script src="script.js"></script>
 </body>
 </html>

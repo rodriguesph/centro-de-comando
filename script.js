@@ -2,81 +2,59 @@ const LOOKER_STUDIO_EMBED_URL = "https://lookerstudio.google.com/embed/reporting
 
 let allTasks = [];
 let allUsers = []; 
-let chartInstance = null;
 let currentTaskId = null;
 let currentUserEmail = null; 
 let currentUserRole = null; 
 
-// ==========================================================================
-// 2. NAVEGAÇÃO E CONTROLE DE TELA
-// ==========================================================================
+// NAVEGAÇÃO
 function showSection(sec) {
     document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav-link').forEach(btn => btn.classList.remove('active'));
-
-    const targetSection = document.getElementById(`sec-${sec}`);
-    if (targetSection) targetSection.classList.add('active');
-
-    // Estiliza o botão de navegação correspondente
-    const navBtn = document.getElementById(`btn-nav-${sec === 'dashboard-bi' ? 'bi' : (sec === 'acompanhamento' ? 'op' : sec)}`);
-    if (navBtn) navBtn.classList.add('active');
+    document.getElementById(`sec-${sec}`).classList.add('active');
+    
+    const navBtnId = sec === 'dashboard-bi' ? 'btn-nav-bi' : (sec === 'acompanhamento' ? 'btn-nav-op' : `btn-nav-${sec}`);
+    if(document.getElementById(navBtnId)) document.getElementById(navBtnId).classList.add('active');
 
     if(sec === 'usuarios') renderUsers();
+    if(sec === 'dashboard-bi') initializeBI();
 }
 
-// Login/Logout
-document.getElementById('login-btn').onclick = () => auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
-function logout() { auth.signOut(); }
-
-// Observer de Autenticação
+// LOGIN / AUTH
 auth.onAuthStateChanged(async user => {
     if (user) {
         currentUserEmail = user.email.toLowerCase();
-        try {
-            const userQuery = await db.collection('usuarios').where('email', '==', currentUserEmail).get();
-            if (userQuery.empty) {
-                alert("Acesso Negado. Usuário não credenciado.");
-                auth.signOut();
-                return;
-            }
-            const userData = userQuery.docs[0].data();
-            currentUserRole = userData.papel;
-
-            document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('app-screen').style.display = 'block';
-            document.getElementById('saudacao').innerText = `Olá, ${userData.nome.split(' ')[0]} (${currentUserRole.toUpperCase()})`;
-            
-            // Controle de acesso aos botões
-            const btnNovo = document.getElementById('btn-nav-novo');
-            const btnUsuarios = document.getElementById('btn-nav-usuarios');
-            if(btnNovo) btnNovo.style.display = (currentUserRole === 'super-admin' || currentUserRole === 'gestor') ? 'inline-block' : 'none';
-            if(btnUsuarios) btnUsuarios.style.display = (currentUserRole === 'super-admin') ? 'inline-block' : 'none';
-            
-            initializeBI();
-            loadData();
-            loadUsersDatabase();
-            showSection('dashboard-bi'); 
-            
-        } catch (error) {
-            console.error("Erro na autenticação:", error);
-            auth.signOut();
-        }
+        const userQuery = await db.collection('usuarios').where('email', '==', currentUserEmail).get();
+        if (userQuery.empty) { alert("Acesso Negado."); auth.signOut(); return; }
+        
+        const userData = userQuery.docs[0].data();
+        currentUserRole = userData.papel;
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('app-screen').style.display = 'block';
+        document.getElementById('saudacao').innerText = `Olá, ${userData.nome.split(' ')[0]} (${currentUserRole.toUpperCase()})`;
+        
+        const isAdm = (currentUserRole === 'super-admin' || currentUserRole === 'gestor');
+        document.getElementById('btn-nav-novo').style.display = isAdm ? 'inline-block' : 'none';
+        document.getElementById('btn-nav-usuarios').style.display = (currentUserRole === 'super-admin') ? 'inline-block' : 'none';
+        
+        loadData();
+        loadUsersDatabase();
+        showSection('dashboard-bi');
     } else {
         document.getElementById('login-screen').style.display = 'flex';
         document.getElementById('app-screen').style.display = 'none';
     }
 });
 
+function logout() { auth.signOut(); }
+document.getElementById('login-btn').onclick = () => auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+
+// BI
 function initializeBI() {
     const iframe = document.getElementById('bi-iframe');
-    if(iframe && LOOKER_STUDIO_EMBED_URL !== "") {
-        iframe.src = LOOKER_STUDIO_EMBED_URL;
-    }
+    if(iframe && iframe.src === "") iframe.src = LOOKER_STUDIO_EMBED_URL;
 }
 
-// ==========================================================================
-// 3. GESTÃO DE DADOS (FIREBASE)
-// ==========================================================================
+// DADOS
 function loadData() {
     db.collection('tarefas').orderBy('criadoEm', 'desc').onSnapshot(snapshot => {
         allTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -89,264 +67,136 @@ function loadData() {
 function loadUsersDatabase() {
     db.collection('usuarios').onSnapshot(snapshot => {
         allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        populateUserSelects(); 
-        if(document.getElementById('sec-usuarios').classList.contains('active')) renderUsers();
+        populateUserSelects();
+        renderUsers();
     });
 }
 
-// POPULAR SELECTS DE EQUIPE
+// EQUIPE
 function populateUserSelects() {
     const selects = document.querySelectorAll('.resp-select');
-    const optionsHTML = '<option value="">Selecione um membro...</option>' + 
-        allUsers.map(u => `<option value="${u.email}">${u.nome}</option>`).join('');
-    
-    selects.forEach(sel => {
-        const currentVal = sel.value;
-        sel.innerHTML = optionsHTML;
-        sel.value = currentVal; 
-    });
+    const optionsHTML = '<option value="">Selecione...</option>' + allUsers.map(u => `<option value="${u.email}">${u.nome}</option>`).join('');
+    selects.forEach(sel => sel.innerHTML = optionsHTML);
 }
 
 function addResponsavelField() {
     const container = document.getElementById('responsaveis-container');
     const div = document.createElement('div');
     div.className = 'resp-row';
-    const optionsHTML = '<option value="">Selecione um membro...</option>' + 
-        allUsers.map(u => `<option value="${u.email}">${u.nome}</option>`).join('');
-    
-    div.innerHTML = `<select class="resp-select">${optionsHTML}</select>`;
+    div.innerHTML = `<select class="resp-select" style="margin-top:5px;">${document.querySelector('.resp-select').innerHTML}</select>`;
     container.appendChild(div);
 }
 
-// SALVAR NOVA DEMANDA
-async function saveDemand() {
-    if (currentUserRole !== 'super-admin' && currentUserRole !== 'gestor') return;
-
-    const project = document.getElementById('projectInput').value;
-    const title = document.getElementById('taskTitle').value; 
-    const desc = document.getElementById('taskDesc').value;
-    const dateStart = document.getElementById('dateInputStart').value;
-    const dateEnd = document.getElementById('dateInputEnd').value;
-    const area = document.getElementById('areaSelect').value;
-    
-    const resps = [];
-    document.querySelectorAll('.resp-select').forEach(sel => {
-        if(sel.value) {
-            const userObj = allUsers.find(u => u.email === sel.value);
-            if(userObj && !resps.find(r => r.email === userObj.email)) {
-                resps.push({ nome: userObj.nome, email: userObj.email });
-            }
-        }
+function renderUsers() {
+    const board = document.getElementById('lista-usuarios-board');
+    if(!board) return;
+    let html = `<div class="table-container shadow"><table><thead><tr><th>Nome</th><th>E-mail</th><th>Acesso</th><th style="text-align:right">Ação</th></tr></thead><tbody>`;
+    allUsers.forEach(u => {
+        html += `<tr><td class="bold">${u.nome}</td><td>${u.email}</td><td><span class="status-pill status-fazer">${u.papel}</span></td><td style="text-align:right">
+        ${u.email !== currentUserEmail ? `<button onclick="removerUsuario('${u.id}')" class="btn-danger">REMOVER</button>` : '<small>(Você)</small>'}</td></tr>`;
     });
-
-    if(!project || !title || !dateStart || !dateEnd || resps.length === 0) {
-        alert("Preencha todos os campos obrigatórios (Projeto, Título, Datas e Equipe).");
-        return;
-    }
-
-    const taskData = {
-        project, text: title, descricao: desc, area, resps,
-        data_inicio: dateStart, data_fim: dateEnd,
-        perc_desenvolvimento: 0,
-        status: 'fazer', criadoEm: new Date(), historico: [],
-        email: resps[0].email 
-    };
-
-    try {
-        await db.collection('tarefas').add(taskData);
-        alert("Demanda registrada. Notificando equipe...");
-        
-        for (const r of resps) {
-            await emailjs.send("service_yw91uty", "template_p5wyzq8", {
-                responsavel: r.nome,
-                projeto: project,
-                email_to: r.email 
-            });
-        }
-        
-        alert("Sucesso! Equipe notificada por e-mail.");
-        limparFormularioDemanda();
-        showSection('acompanhamento');
-    } catch (e) { console.error(e); alert("Erro ao salvar."); }
+    board.innerHTML = html + `</tbody></table></div>`;
 }
 
-function limparFormularioDemanda() {
-    document.getElementById('taskTitle').value = "";
-    document.getElementById('taskDesc').value = "";
-    document.getElementById('projectInput').value = "";
+async function removerUsuario(id) { if(confirm("Revogar acesso?")) await db.collection('usuarios').doc(id).delete(); }
+async function cadastrarUsuario() {
+    const nome = document.getElementById('novoUserNome').value;
+    const email = document.getElementById('novoUserEmail').value.toLowerCase();
+    const papel = document.getElementById('novoUserPapel').value;
+    if(nome && email) await db.collection('usuarios').add({ nome, email, papel });
 }
 
-// ==========================================================================
-// 4. INTERFACE E DASHBOARD
-// ==========================================================================
-function getVisibleTasks() {
-    if (currentUserRole === 'super-admin' || currentUserRole === 'gestor') return allTasks; 
-    return allTasks.filter(t => t.resps && t.resps.some(r => r.email === currentUserEmail));
-}
-
+// OPERACIONAL
 function updateProjectList() {
-    const tasks = getVisibleTasks();
-    const list = document.getElementById('projectsList');
     const filter = document.getElementById('filterProject');
-    const projects = [...new Set(tasks.map(t => t.project))].sort();
-    
-    if(list) list.innerHTML = projects.map(p => `<option value="${p}">`).join('');
-    
-    if(filter) {
-        const currentSelection = filter.value;
-        let optionsHTML = '<option value="geral">Todos os Projetos</option>';
-        projects.forEach(p => { optionsHTML += `<option value="${p}">${p}</option>`; });
-        filter.innerHTML = optionsHTML;
-        filter.value = (currentSelection && projects.includes(currentSelection)) ? currentSelection : 'geral';
-    }
+    const projects = [...new Set(allTasks.map(t => t.project))].sort();
+    filter.innerHTML = '<option value="geral">Todos os Projetos</option>' + projects.map(p => `<option value="${p}">${p}</option>`).join('');
 }
 
 function renderDashboard() {
-    const visibleTasks = getVisibleTasks();
     const selected = document.getElementById('filterProject').value;
-    const filtered = selected === 'geral' ? visibleTasks : visibleTasks.filter(t => t.project === selected);
-    
+    const filtered = selected === 'geral' ? allTasks : allTasks.filter(t => t.project === selected);
     const stats = {
         total: filtered.length,
         atrasadas: filtered.filter(t => t.status !== 'concluido' && t.data_fim && new Date(t.data_fim) < new Date()).length,
         pendentes: filtered.filter(t => t.status === 'aprovacao').length,
         concluidas: filtered.filter(t => t.status === 'concluido').length
     };
-
     document.getElementById('stats-grid').innerHTML = `
-        <div class="stat-card shadow"><h3>${stats.total}</h3><p>Demandas</p></div>
-        <div class="stat-card shadow" style="border-left: 4px solid #dc3545"><h3>${stats.atrasadas}</h3><p>Atrasadas</p></div>
-        <div class="stat-card shadow" style="border-left: 4px solid #3b82f6"><h3>${stats.pendentes}</h3><p>Aguardando OK</p></div>
-        <div class="stat-card shadow" style="border-left: 4px solid #28a745"><h3>${stats.concluidas}</h3><p>Finalizadas</p></div>
-    `;
+        <div class="stat-card"><h3>${stats.total}</h3><p>Demandas</p></div>
+        <div class="stat-card" style="border-left:4px solid #dc3545"><h3>${stats.atrasadas}</h3><p>Atrasadas</p></div>
+        <div class="stat-card" style="border-left:4px solid #000"><h3>${stats.pendentes}</h3><p>Em Aprovação</p></div>
+        <div class="stat-card" style="border-left:4px solid #28a745"><h3>${stats.concluidas}</h3><p>Concluídas</p></div>`;
 }
 
 function renderBoard() {
     const board = document.getElementById('projectsBoard');
-    const visibleTasks = getVisibleTasks();
     const selected = document.getElementById('filterProject').value;
-    const filtered = selected === 'geral' ? visibleTasks : visibleTasks.filter(t => t.project === selected);
-
-    if(filtered.length === 0) { 
-        board.innerHTML = '<p style="padding:40px; text-align:center; color:#888;">Nenhuma atividade no radar.</p>'; 
-        return; 
-    }
-
-    let html = `<table><thead><tr>
-        <th>Projeto</th><th>Tarefa</th><th>Prazo</th><th>Resp.</th><th>Status</th>
-    </tr></thead><tbody>`;
-
+    const filtered = (selected === 'geral' ? allTasks : allTasks.filter(t => t.project === selected)).filter(t => (currentUserRole === 'super-admin' || currentUserRole === 'gestor') || t.resps.some(r => r.email === currentUserEmail));
+    
+    let html = `<table><thead><tr><th>Projeto</th><th>Tarefa</th><th>Prazo</th><th>Status</th></tr></thead><tbody>`;
     filtered.forEach(t => {
-        const respNome = t.resps ? t.resps[0].nome.split(' ')[0] : 'N/D';
         const sClass = `status-${t.status === 'concluido' ? 'concluido' : (t.status === 'aprovacao' ? 'andamento' : 'fazer')}`;
-        
-        html += `<tr onclick="abrirModal('${t.id}')" style="cursor:pointer">
-            <td class="bold">${t.project}</td>
-            <td>${t.text} <br><small style="color:#888">${t.perc_desenvolvimento || 0}% concluído</small></td>
-            <td>${t.data_fim ? t.data_fim.split('-').reverse().join('/') : 'N/D'}</td>
-            <td>${respNome}</td>
-            <td><span class="status-pill ${sClass}">${t.status.toUpperCase()}</span></td>
-        </tr>`;
+        html += `<tr onclick="abrirModal('${t.id}')" style="cursor:pointer"><td class="bold">${t.project}</td><td>${t.text}</td><td>${t.data_fim || 'N/D'}</td><td><span class="status-pill ${sClass}">${t.status}</span></td></tr>`;
     });
-
-    html += `</tbody></table>`;
-    board.innerHTML = html;
+    board.innerHTML = html + `</tbody></table>`;
 }
 
-// ==========================================================================
-// 5. MODAL DE GESTÃO E EDIÇÃO
-// ==========================================================================
+// MODAL & ESC
 function abrirModal(id) {
     currentTaskId = id;
     const t = allTasks.find(x => x.id === id);
-    const modal = document.getElementById('taskModal');
-    modal.classList.add('active');
-    
-    const isGestor = (currentUserRole === 'super-admin' || currentUserRole === 'gestor');
+    document.getElementById('taskModal').classList.add('active');
+    const isAdm = (currentUserRole === 'super-admin' || currentUserRole === 'gestor');
     
     document.getElementById('editTitle').value = t.text;
-    document.getElementById('editTitle').disabled = !isGestor;
     document.getElementById('editDateStart').value = t.data_inicio || "";
-    document.getElementById('editDateStart').disabled = !isGestor;
     document.getElementById('editDateEnd').value = t.data_fim || "";
-    document.getElementById('editDateEnd').disabled = !isGestor;
     document.getElementById('editDesc').value = t.descricao || "";
     document.getElementById('editPerc').value = t.perc_desenvolvimento || 0;
+    document.getElementById('editStatus').value = t.status;
+    document.getElementById('opt-concluido').style.display = isAdm ? 'block' : 'none';
     
-    const statusSelect = document.getElementById('editStatus');
-    statusSelect.value = t.status;
-    document.getElementById('opt-concluido').style.display = isGestor ? 'block' : 'none';
-
-    // Histórico
-    const histContainer = document.getElementById('modalHistorico');
-    histContainer.innerHTML = (t.historico && t.historico.length > 0) ? 
-        t.historico.map(h => `<div class="history-item">
-            <strong>${h.autor.split('@')[0]}</strong> <small>${h.data}</small><br>${h.texto}
-        </div>`).join('') : "<em>Sem reportes.</em>";
-    
-    document.getElementById('btn-delete-task').style.display = isGestor ? 'inline-block' : 'none';
+    const hist = document.getElementById('modalHistorico');
+    hist.innerHTML = (t.historico && t.historico.length > 0) ? t.historico.map(h => `<div class="history-item"><strong>${h.autor.split('@')[0]}</strong> <small>${h.data}</small><br>${h.texto}</div>`).join('') : "<em>Sem reportes.</em>";
+    document.getElementById('btn-delete-task').style.display = isAdm ? 'inline-block' : 'none';
 }
 
 function closeModal() { document.getElementById('taskModal').classList.remove('active'); }
+document.addEventListener('keydown', (e) => { if(e.key === "Escape") closeModal(); });
 
 async function saveModalChanges() {
-    const t = allTasks.find(x => x.id === currentTaskId);
-    const isGestor = (currentUserRole === 'super-admin' || currentUserRole === 'gestor');
-    const newReportText = document.getElementById('newReport').value.trim();
-    const newStatus = document.getElementById('editStatus').value;
-    const newPerc = document.getElementById('editPerc').value;
-    
+    const report = document.getElementById('newReport').value.trim();
     const update = { 
-        status: newStatus, 
-        perc_desenvolvimento: parseInt(newPerc) || 0 
+        status: document.getElementById('editStatus').value, 
+        perc_desenvolvimento: parseInt(document.getElementById('editPerc').value) || 0 
     };
-
-    if(isGestor) {
+    if(currentUserRole === 'super-admin' || currentUserRole === 'gestor') {
         update.text = document.getElementById('editTitle').value;
         update.data_inicio = document.getElementById('editDateStart').value;
         update.data_fim = document.getElementById('editDateEnd').value;
     }
-
-    if(newReportText !== "") {
-        update.historico = firebase.firestore.FieldValue.arrayUnion({
-            data: new Date().toLocaleString('pt-BR'), autor: currentUserEmail, texto: newReportText
-        });
+    if(report) {
+        update.historico = firebase.firestore.FieldValue.arrayUnion({ data: new Date().toLocaleString('pt-BR'), autor: currentUserEmail, texto: report });
     }
-
     await db.collection('tarefas').doc(currentTaskId).update(update);
     document.getElementById('newReport').value = "";
     closeModal();
 }
 
-async function deleteTask() {
-    if(confirm("Tem certeza que deseja EXCLUIR esta demanda estrategica?")) {
-        await db.collection('tarefas').doc(currentTaskId).delete();
-        closeModal();
-    }
+async function saveDemand() {
+    const project = document.getElementById('projectInput').value;
+    const title = document.getElementById('taskTitle').value;
+    const resps = Array.from(document.querySelectorAll('.resp-select')).map(s => ({ email: s.value, nome: allUsers.find(u => u.email === s.value)?.nome })).filter(r => r.email);
+    
+    if(!project || !title || resps.length === 0) return alert("Dados incompletos.");
+    
+    await db.collection('tarefas').add({
+        project, text: title, descricao: document.getElementById('taskDesc').value,
+        data_inicio: document.getElementById('dateInputStart').value, data_fim: document.getElementById('dateInputEnd').value,
+        status: 'fazer', perc_desenvolvimento: 0, resps, criadoEm: new Date(), historico: [], email: resps[0].email
+    });
+    showSection('acompanhamento');
 }
 
-// ==========================================================================
-// 6. GESTÃO DE USUÁRIOS
-// ==========================================================================
-async function cadastrarUsuario() {
-    const nome = document.getElementById('novoUserNome').value.trim();
-    const email = document.getElementById('novoUserEmail').value.toLowerCase().trim();
-    const papel = document.getElementById('novoUserPapel').value;
-    if(!nome || !email) return alert("Nome e e-mail são obrigatórios.");
-    await db.collection('usuarios').add({ nome, email, papel });
-    alert("Membro credenciado!");
-}
-
-function renderUsers() {
-    const board = document.getElementById('lista-usuarios-board');
-    board.innerHTML = allUsers.map(u => `
-        <div class="user-card shadow">
-            <div><strong>${u.nome}</strong><br><small>${u.email} | ${u.papel.toUpperCase()}</small></div>
-            ${u.email !== currentUserEmail ? `<button onclick="removerUsuario('${u.id}')" class="btn-danger">Remover</button>` : ''}
-        </div>
-    `).join('');
-}
-
-async function removerUsuario(id) {
-    if(confirm("Revogar acesso deste membro?")) await db.collection('usuarios').doc(id).delete();
-}
+async function deleteTask() { if(confirm("Excluir?")) { await db.collection('tarefas').doc(currentTaskId).delete(); closeModal(); } }
