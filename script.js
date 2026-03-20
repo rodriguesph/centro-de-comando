@@ -3,7 +3,7 @@
 // ==========================================================================
 let allTasks = [];
 let allUsers = []; 
-let allAreasData = []; // Nova Coleção
+let allAreasData = []; 
 let currentFilteredTasks = []; 
 let currentTaskId = null;
 let currentUserEmail = null; 
@@ -77,7 +77,7 @@ document.getElementById('login-btn').onclick = () => auth.signInWithPopup(new fi
 function loadAreasEstrategicas() {
     db.collection('areas_estrategicas').onSnapshot(snapshot => {
         allAreasData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        loadDataTasks(); // Só carrega as tarefas depois de saber o mapeamento das áreas
+        loadDataTasks(); 
     });
 }
 
@@ -86,6 +86,7 @@ function loadUsersDatabase() {
         allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         populateUserSelectsMaster();
         renderUsers();
+        if(document.getElementById('sec-admin').classList.contains('active')) renderAdminPanel();
     });
 }
 
@@ -93,7 +94,6 @@ function loadDataTasks() {
     db.collection('tarefas').orderBy('criadoEm', 'desc').onSnapshot(snapshot => {
         allTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
-        // MOTOR DE PERMISSÕES MULTI-CAMADAS
         if (currentUserRole === 'super-admin') {
             managedAreas = allAreasData.map(a => a.id);
             managedProjects = [...new Set(allTasks.map(t => t.project))];
@@ -112,38 +112,67 @@ function loadDataTasks() {
 }
 
 // ==========================================================================
-// 3. ADMINISTRAÇÃO E REGRAS DE CASCATA (NOVO)
+// 3. ADMINISTRAÇÃO AVANÇADA (ÁREAS E PROJETOS EM LOTE)
 // ==========================================================================
 function renderAdminPanel() {
     if(currentUserRole !== 'super-admin') return;
     
-    // Lista de Áreas Ativas
-    let html = '<ul>';
+    // 1. Datalist de Áreas
+    const datalist = document.getElementById('adminAreaList');
+    datalist.innerHTML = allAreasData.map(a => `<option value="${a.id}">`).join('');
+    
+    // 2. Checkboxes de Gestores (Lista Mestra)
+    const container = document.getElementById('adminAreaGestoresContainer');
+    container.innerHTML = allUsers.map(u => `
+        <label style="display: block; margin-bottom: 5px; font-size: 12px; cursor: pointer;">
+            <input type="checkbox" class="admin-gestor-check" value="${u.email}"> ${u.nome} <span style="color:#888; font-size:10px;">(${u.email})</span>
+        </label>
+    `).join('');
+    carregarGestoresArea(); // Sincroniza se já houver texto no input
+
+    // 3. Lista de Áreas Ativas
+    let htmlAreas = '<ul style="padding-left: 20px;">';
     allAreasData.forEach(a => {
         const gList = a.gestores ? a.gestores.join(', ') : 'Nenhum';
-        html += `<li style="margin-bottom: 8px;"><strong>${a.id}</strong> <br><span style="color:#666">Gestores: ${gList}</span> <button onclick="deletarArea('${a.id}')" class="btn-text" style="color:red; font-size:10px;">[EXCLUIR]</button></li>`;
+        htmlAreas += `<li style="margin-bottom: 8px;"><strong>${a.id}</strong> <br><span style="color:#666">Gestores: ${gList}</span> <button onclick="deletarArea('${a.id}')" class="btn-text" style="color:red; font-size:10px;">[EXCLUIR]</button></li>`;
     });
-    document.getElementById('admin-areas-list').innerHTML = html + '</ul>';
+    document.getElementById('admin-areas-list').innerHTML = htmlAreas + '</ul>';
 
-    // Select de Projetos para Refatoração
-    const allProjs = [...new Set(allTasks.map(t => t.project))].sort();
-    document.getElementById('adminProjectSelect').innerHTML = '<option value="">Selecione o projeto...</option>' + allProjs.map(p => `<option value="${p}">${p}</option>`).join('');
+    // 4. Lista Clicável de Projetos
+    const projs = {};
+    allTasks.forEach(t => { projs[t.project] = t.area || 'Sem Área'; });
     
-    // Select de Novas Áreas para Refatoração
+    let htmlProjs = '';
+    Object.keys(projs).sort().forEach(p => {
+        htmlProjs += `
+            <div onclick="prepararEdicaoProjeto('${p}', '${projs[p]}')" style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">
+                <strong style="font-size: 13px;">${p}</strong>
+                <span class="status-pill status-fazer" style="font-size: 9px;">${projs[p]}</span>
+            </div>`;
+    });
+    document.getElementById('admin-projects-list').innerHTML = htmlProjs;
+    
+    // 5. Select de Novas Áreas para o Form de Refatoração
     document.getElementById('adminProjectNewArea').innerHTML = '<option value="">Manter Área Atual</option>' + allAreasData.map(a => `<option value="${a.id}">${a.id}</option>`).join('');
+}
+
+function carregarGestoresArea() {
+    const inputVal = document.getElementById('adminAreaName').value.trim();
+    const areaExists = allAreasData.find(a => a.id === inputVal);
+    
+    const checkboxes = document.querySelectorAll('.admin-gestor-check');
+    checkboxes.forEach(cb => {
+        cb.checked = (areaExists && areaExists.gestores && areaExists.gestores.includes(cb.value));
+    });
 }
 
 async function salvarAreaEstrategica() {
     const nomeArea = document.getElementById('adminAreaName').value.trim();
-    const selectGestores = document.getElementById('adminAreaGestores');
-    const gestoresSelecionados = Array.from(selectGestores.selectedOptions).map(opt => opt.value);
+    const gestoresSelecionados = Array.from(document.querySelectorAll('.admin-gestor-check:checked')).map(cb => cb.value);
 
     if(!nomeArea) return alert("O nome da área é obrigatório.");
     
-    // Como a área é a chave mestra, o ID no firebase será o próprio nome da área para evitar duplicidade
-    await db.collection('areas_estrategicas').doc(nomeArea).set({
-        gestores: gestoresSelecionados
-    });
+    await db.collection('areas_estrategicas').doc(nomeArea).set({ gestores: gestoresSelecionados });
     
     document.getElementById('adminAreaName').value = '';
     alert("Área configurada com sucesso!");
@@ -155,18 +184,28 @@ async function deletarArea(idArea) {
     await db.collection('areas_estrategicas').doc(idArea).delete();
 }
 
-// A CIRURGIA: ESCRITA EM LOTE NO NOSQL
+function prepararEdicaoProjeto(projName, currArea) {
+    document.getElementById('admin-edit-project-form').style.display = 'block';
+    document.getElementById('adminEditProjTarget').innerText = projName;
+    document.getElementById('adminNewProjectName').value = projName;
+    document.getElementById('adminProjectNewArea').value = currArea;
+    // Scroll suave para o form
+    document.getElementById('admin-edit-project-form').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function cancelarEdicaoProjetoAdmin() {
+    document.getElementById('admin-edit-project-form').style.display = 'none';
+}
+
 async function refatorarProjetoCascata() {
-    const oldName = document.getElementById('adminProjectSelect').value;
+    const oldName = document.getElementById('adminEditProjTarget').innerText;
     const newNameInput = document.getElementById('adminNewProjectName').value.trim();
     const newArea = document.getElementById('adminProjectNewArea').value;
 
-    if(!oldName) return alert("Selecione um projeto para refatorar.");
-    if(!newNameInput && !newArea) return alert("Você precisa informar um novo nome ou uma nova área para efetuar a mudança.");
-
+    if(!oldName) return;
     const finalName = newNameInput || oldName;
 
-    if(!confirm(`ALERTA DE SISTEMA:\nVocê vai alterar TODAS as tarefas vinculadas a "${oldName}".\nIsso não pode ser desfeito. Confirma?`)) return;
+    if(!confirm(`ALERTA: Você vai atualizar TODAS as tarefas de "${oldName}". Confirma?`)) return;
 
     const batch = db.batch();
     const snapshot = await db.collection('tarefas').where('project', '==', oldName).get();
@@ -181,8 +220,8 @@ async function refatorarProjetoCascata() {
 
     try {
         await batch.commit();
-        document.getElementById('adminNewProjectName').value = '';
-        alert(`Sucesso! ${snapshot.size} tarefa(s) foram reescritas.`);
+        cancelarEdicaoProjetoAdmin();
+        alert(`Sucesso! ${snapshot.size} tarefa(s) foram reescritas e realocadas.`);
         renderAdminPanel();
     } catch (e) {
         console.error("Erro no Batch Write:", e);
@@ -226,14 +265,6 @@ function populateUserSelectsMaster() {
         sel.innerHTML = optionsHTML;
         sel.value = currentVal;
     });
-    
-    // Popula select múltiplo de admin
-    const adminSelect = document.getElementById('adminAreaGestores');
-    if(adminSelect) {
-        const adminVals = Array.from(adminSelect.selectedOptions).map(opt => opt.value);
-        adminSelect.innerHTML = allUsers.map(u => `<option value="${u.email}">${u.nome} (${u.email})</option>`).join('');
-        Array.from(adminSelect.options).forEach(opt => { if(adminVals.includes(opt.value)) opt.selected = true; });
-    }
 }
 
 function addResponsavelField(containerId, presetEmail = "", presetRole = "executor") {
@@ -278,7 +309,6 @@ async function saveDemand() {
     const dateStart = document.getElementById('dateInputStart').value;
     const dateEnd = document.getElementById('dateInputEnd').value;
     
-    // RBAC na Criação: Super Admin, Gestor da Área ou Gestor do Projeto
     if (currentUserRole !== 'super-admin' && !managedAreas.includes(area) && !managedProjects.includes(project)) {
         alert("Acesso Negado: Você não tem permissão de gestão nesta área/projeto.");
         return;
@@ -305,8 +335,8 @@ async function saveDemand() {
         alert("Demanda lançada!");
         document.getElementById('taskTitle').value = '';
         document.getElementById('taskDesc').value = '';
-        document.getElementById('responsaveis-container').innerHTML = ''; // Limpa container
-        addResponsavelField('responsaveis-container'); // Deixa uma linha limpa
+        document.getElementById('responsaveis-container').innerHTML = ''; 
+        addResponsavelField('responsaveis-container'); 
         showSection('acompanhamento');
     } catch (e) { alert("Erro ao lançar a demanda."); }
 }
@@ -316,7 +346,6 @@ async function saveDemand() {
 // ==========================================================================
 function getVisibleTasksBoard() {
     if (currentUserRole === 'super-admin') return allTasks;
-    // Vê tarefas de projetos que gerencia, áreas que gerencia, ou tarefas que está envolvido
     return allTasks.filter(t => managedAreas.includes(t.area) || managedProjects.includes(t.project) || (t.resps && t.resps.some(r => r.email === currentUserEmail)));
 }
 
@@ -399,10 +428,8 @@ function abrirModal(id) {
     const t = allTasks.find(x => x.id === id);
     document.getElementById('taskModal').classList.add('active');
     
-    // RBAC: Se ele domina a área ou o projeto, ele é Gestor desta tela
     const isGestorPleno = currentUserRole === 'super-admin' || managedAreas.includes(t.area) || managedProjects.includes(t.project);
     
-    // Campos fixos (A edição em lote de Projeto e Área agora é no Painel Admin)
     document.getElementById('editArea').value = t.area || "Sem Área";
     document.getElementById('editProject').value = t.project || "Sem Projeto";
     
@@ -416,14 +443,12 @@ function abrirModal(id) {
     document.getElementById('editPerc').value = t.perc_desenvolvimento || 0;
     document.getElementById('editStatus').value = t.status;
     
-    // Carrega Equipe Dinamicamente
     const containerResps = document.getElementById('edit-responsaveis-container');
-    containerResps.innerHTML = ''; // Limpa
+    containerResps.innerHTML = ''; 
     if(t.resps) {
         t.resps.forEach(r => addResponsavelField('edit-responsaveis-container', r.email, r.papel));
     }
     
-    // Bloqueia adição/remoção de equipe se não for gestor
     document.getElementById('btn-add-edit-resp').style.display = isGestorPleno ? 'inline-block' : 'none';
     document.querySelectorAll('#edit-responsaveis-container select').forEach(sel => sel.disabled = !isGestorPleno);
     document.querySelectorAll('.btn-remove-resp').forEach(btn => btn.style.display = isGestorPleno ? 'inline-block' : 'none');

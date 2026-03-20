@@ -157,27 +157,50 @@
             <section id="sec-admin" class="content-section">
                 <div class="section-header"><h2>Controle Arquitetural</h2></div>
                 <div class="form-grid">
+                    
                     <div class="form-container shadow">
                         <h3>Gestão de Áreas Estratégicas</h3>
-                        <div class="form-group"><label>Nome da Área</label><input type="text" id="adminAreaName" placeholder="Ex: Docência"></div>
                         <div class="form-group">
-                            <label>Gestores desta Área (Segure Ctrl para vários)</label>
-                            <select id="adminAreaGestores" multiple style="height: 100px;"></select>
+                            <label>Nome da Área (Selecione para editar ou digite para criar)</label>
+                            <input type="text" id="adminAreaName" list="adminAreaList" placeholder="Ex: Docência" oninput="carregarGestoresArea()">
+                            <datalist id="adminAreaList"></datalist>
+                        </div>
+                        <div class="form-group">
+                            <label>Gestores desta Área</label>
+                            <div id="adminAreaGestoresContainer" class="checkbox-list-container" style="max-height: 150px; overflow-y: auto; border: 1px solid #e2e8f0; padding: 10px; border-radius: 4px; background: #f8fafc;">
+                                </div>
                         </div>
                         <button onclick="salvarAreaEstrategica()" class="btn-primary" style="width: 100%;">SALVAR ÁREA</button>
+                        
                         <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
                         <h4>Áreas Ativas</h4>
                         <div id="admin-areas-list" style="font-size: 11px; max-height: 200px; overflow-y: auto;"></div>
                     </div>
                     
-                    <div class="form-container shadow" style="border: 2px solid #dc3545;">
-                        <h3 style="color: #dc3545;">Refatoração em Lote (CUIDADO)</h3>
-                        <p style="font-size: 11px; color: #666; margin-bottom: 15px;">Atenção: A alteração abaixo reescreverá todas as tarefas vinculadas ao projeto selecionado.</p>
-                        <div class="form-group"><label>Selecione o Projeto Alvo</label><select id="adminProjectSelect"></select></div>
-                        <div class="form-group"><label>Novo Nome do Projeto</label><input type="text" id="adminNewProjectName" placeholder="Deixe em branco para manter"></div>
-                        <div class="form-group"><label>Realocar para Nova Área</label><select id="adminProjectNewArea"></select></div>
-                        <button onclick="refatorarProjetoCascata()" class="btn-danger" style="width: 100%;">APLICAR MUDANÇA EM CASCATA</button>
+                    <div class="form-container shadow" style="border-top: 4px solid #dc3545;">
+                        <h3 style="color: #dc3545; margin-top: 0;">Gestão de Projetos (Em Lote)</h3>
+                        <p style="font-size: 11px; color: #666; margin-bottom: 10px;">Selecione um projeto para renomeá-lo ou movê-lo de área. Todas as tarefas serão atualizadas instantaneamente.</p>
+                        
+                        <div id="admin-projects-list" style="max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 4px; margin-bottom: 15px;">
+                            </div>
+                        
+                        <div id="admin-edit-project-form" style="display: none; background: #fff5f5; border: 1px solid #fc8181; padding: 15px; border-radius: 4px;">
+                            <h4 style="color: #c53030; margin-top: 0; font-size: 12px;">Editando: <span id="adminEditProjTarget" style="font-weight: 700;"></span></h4>
+                            <div class="form-group">
+                                <label>Novo Nome do Projeto</label>
+                                <input type="text" id="adminNewProjectName">
+                            </div>
+                            <div class="form-group">
+                                <label>Realocar para Nova Área</label>
+                                <select id="adminProjectNewArea"></select>
+                            </div>
+                            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                                <button onclick="refatorarProjetoCascata()" class="btn-danger" style="flex: 2;">APLICAR EM CASCATA</button>
+                                <button onclick="cancelarEdicaoProjetoAdmin()" class="btn-secondary" style="flex: 1;">CANCELAR</button>
+                            </div>
+                        </div>
                     </div>
+
                 </div>
             </section>
         </main>
