@@ -150,9 +150,12 @@
             </section>
 
             <section id="sec-acompanhamento" class="content-section">
-                <div class="section-header">
+                <div class="section-header" style="flex-wrap: wrap; gap: 15px;">
                     <h2>Visão Operacional</h2>
-                    <select id="filterProject" onchange="renderDashboard()" class="select-filter" style="width: 250px; padding: 8px;"></select>
+                    <div style="display: flex; gap: 10px; margin-left: auto;">
+                        <select id="filterAreaOp" onchange="updateOpProjectFilter()" class="select-filter" style="width: 200px; padding: 8px;"></select>
+                        <select id="filterProjectOp" onchange="renderDashboard()" class="select-filter" style="width: 200px; padding: 8px;"></select>
+                    </div>
                 </div>
                 <div id="stats-grid" class="stats-grid"></div>
                 <div id="projectsBoard" class="table-container shadow"></div>

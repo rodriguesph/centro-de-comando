@@ -22,20 +22,12 @@ function getCalculatedStatus(t) {
     const start = t.data_inicio ? new Date(t.data_inicio + 'T00:00:00') : today;
     const end = t.data_fim ? new Date(t.data_fim + 'T00:00:00') : today;
 
-    // 1. Status Definitivos (Ação manual do usuário)
     if (t.status === 'concluido') return { id: 'concluida', label: 'CONCLUÍDA', class: 'status-concluida' };
     if (t.status === 'aprovacao') return { id: 'aguardando', label: 'AGUARDANDO OK', class: 'status-aguardando' };
-    
-    // 2. Análise de Prazo Final (Se não concluiu nem mandou pra aprovação, e passou da data, é Crítico)
     if (today > end) return { id: 'critica', label: 'CRÍTICA (VENCIDA)', class: 'status-critica' };
-    
-    // 3. Ação manual de Andamento
     if (t.status === 'andamento') return { id: 'execucao', label: 'EM EXECUÇÃO', class: 'status-execucao' };
-    
-    // 4. Análise de Prazo Inicial (Ainda está como "Fazer", mas a data de início já chegou/passou)
     if (today >= start) return { id: 'atrasada', label: 'ATRASADA P/ INICIAR', class: 'status-atrasada' };
     
-    // 5. Default (Antes da data de início)
     return { id: 'nao_iniciada', label: 'NÃO INICIADA', class: 'status-nao-iniciada' };
 }
 
@@ -74,7 +66,7 @@ function updateNavVisibility() {
 }
 
 // ==========================================================================
-// 2. AUTENTICAÇÃO E CARGA
+// 2. AUTENTICAÇÃO E CARGA DE DADOS
 // ==========================================================================
 auth.onAuthStateChanged(async user => {
     if (user) {
@@ -174,10 +166,7 @@ function renderAdminPanel() {
             
             htmlAreas += `
             <div style="padding: 12px 15px; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; background: #fff;">
-                <div>
-                    <strong style="font-size: 14px; color: #0f172a;">${a}</strong><br>
-                    <span style="color:#64748b; font-size:10px; font-weight:700;">GESTORES: <span style="font-weight:500; color:#334155;">${gNomes.toUpperCase()}</span></span>
-                </div>
+                <div><strong style="font-size: 14px; color: #0f172a;">${a}</strong><br><span style="color:#64748b; font-size:10px; font-weight:700;">GESTORES: <span style="font-weight:500; color:#334155;">${gNomes.toUpperCase()}</span></span></div>
                 <button onclick="deletarArea('${a}')" style="background: #fff5f5; border: 1px solid #fc8181; color: #c53030; padding: 6px 12px; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer;">EXCLUIR</button>
             </div>`;
         } else {
@@ -194,10 +183,7 @@ function renderAdminPanel() {
     
     let htmlProjs = '';
     Object.keys(projs).sort((a, b) => a.localeCompare(b)).forEach(p => {
-        htmlProjs += `
-            <div onclick="prepararEdicaoProjeto('${p}', '${projs[p]}')" style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
-                <strong style="font-size: 13px;">${p}</strong><span class="status-pill status-fazer" style="font-size: 9px;">${projs[p]}</span>
-            </div>`;
+        htmlProjs += `<div onclick="prepararEdicaoProjeto('${p}', '${projs[p]}')" style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center;"><strong style="font-size: 13px;">${p}</strong><span class="status-pill status-fazer" style="font-size: 9px;">${projs[p]}</span></div>`;
     });
     document.getElementById('admin-projects-list').innerHTML = htmlProjs;
     document.getElementById('adminProjectNewArea').innerHTML = '<option value="">Deixar Sem Área</option>' + allCombinedAreas.map(a => `<option value="${a}">${a}</option>`).join('');
@@ -221,9 +207,7 @@ async function salvarAreaEstrategica() {
     let nomeArea = selectVal === 'NOVA_AREA' ? inputVal : selectVal;
     if(!nomeArea) return alert("Você deve definir um nome para a área.");
     const gestoresSelecionados = Array.from(document.querySelectorAll('.admin-gestor-check:checked')).map(cb => cb.value);
-    
     await db.collection('areas_estrategicas').doc(nomeArea).set({ gestores: gestoresSelecionados });
-    
     document.getElementById('adminAreaSelect').value = '';
     document.getElementById('adminAreaInput').style.display = 'none';
     document.getElementById('adminAreaInput').value = '';
@@ -231,10 +215,7 @@ async function salvarAreaEstrategica() {
     renderAdminPanel();
 }
 
-async function deletarArea(idArea) {
-    if(!confirm(`Excluir a área ${idArea}?`)) return;
-    await db.collection('areas_estrategicas').doc(idArea).delete();
-}
+async function deletarArea(idArea) { if(confirm(`Excluir a área ${idArea}?`)) await db.collection('areas_estrategicas').doc(idArea).delete(); }
 
 function prepararEdicaoProjeto(projName, currArea) {
     document.getElementById('admin-edit-project-form').style.display = 'block';
@@ -272,8 +253,7 @@ async function cadastrarUsuario() {
     const email = document.getElementById('novoUserEmail').value.toLowerCase().trim();
     if(nome && email) {
         await db.collection('usuarios').add({ nome, email, papel: 'membro' }); 
-        document.getElementById('novoUserNome').value = '';
-        document.getElementById('novoUserEmail').value = '';
+        document.getElementById('novoUserNome').value = ''; document.getElementById('novoUserEmail').value = '';
     }
 }
 function renderUsers() {
@@ -289,7 +269,7 @@ function renderUsers() {
 async function removerUsuario(id) { if(confirm("Revogar acesso deste membro?")) await db.collection('usuarios').doc(id).delete(); }
 
 // ==========================================================================
-// 5. INCLUSÃO (AGORA CRIA TAREFAS INDEPENDENTES CLONADAS)
+// 5. INCLUSÃO (CRIA TAREFAS INDEPENDENTES CLONADAS)
 // ==========================================================================
 function populateUserSelectsMaster() {
     const optionsHTML = '<option value="">Selecione...</option>' + allUsers.map(u => `<option value="${u.email}">${u.nome}</option>`).join('');
@@ -347,41 +327,33 @@ async function saveDemand() {
     }
 
     const resps = coletarEquipeDeContainer('responsaveis-container');
-    
-    if(!area || !project || !title || resps.length === 0 || !dateStart || !dateEnd) {
-        return alert("Preencha Área, Projeto, Título, Datas e pelo menos um Responsável.");
-    }
+    if(!area || !project || !title || resps.length === 0 || !dateStart || !dateEnd) { return alert("Preencha Área, Projeto, Título, Datas e Responsável."); }
     
     try {
-        // MOTOR DE CLONAGEM: Cria uma tarefa separada para cada usuário da lista
         const batch = db.batch();
         for (const r of resps) {
             const newDocRef = db.collection('tarefas').doc(); 
             batch.set(newDocRef, {
-                area, project, text: title, descricao: desc,
-                data_inicio: dateStart, data_fim: dateEnd,
+                area, project, text: title, descricao: desc, data_inicio: dateStart, data_fim: dateEnd,
                 status: 'fazer', resps: [r], criadoEm: new Date(), historico: [], email: r.email
             });
         }
-        await batch.commit(); // Salva todas de uma vez
+        await batch.commit();
 
-        // Disparo de E-mails Individuais
         for (const r of resps) {
             try { await emailjs.send("service_yw91uty", "template_p5wyzq8", { responsavel: r.nome, projeto: project, email_to: r.email }); } 
             catch (error) { console.error("Falha no email:", error); }
         }
         
         alert(`${resps.length} demanda(s) independente(s) lançada(s)!`);
-        document.getElementById('taskTitle').value = '';
-        document.getElementById('taskDesc').value = '';
-        document.getElementById('responsaveis-container').innerHTML = ''; 
-        addResponsavelField('responsaveis-container'); 
+        document.getElementById('taskTitle').value = ''; document.getElementById('taskDesc').value = '';
+        document.getElementById('responsaveis-container').innerHTML = ''; addResponsavelField('responsaveis-container'); 
         showSection('acompanhamento');
     } catch (e) { alert("Erro ao lançar as demandas."); }
 }
 
 // ==========================================================================
-// 6. VISÃO OPERACIONAL E MODAL DE EDIÇÃO
+// 6. VISÃO OPERACIONAL (AGORA COM FILTRO EM CASCATA) E MODAL DE EDIÇÃO
 // ==========================================================================
 function getVisibleTasksBoard() {
     if (currentUserRole === 'super-admin') return allTasks;
@@ -390,34 +362,67 @@ function getVisibleTasksBoard() {
 
 function updateProjectAndAreaLists() {
     const areaSelect = document.getElementById('areaInput');
+    let allowedAreas = [];
+    if (currentUserRole === 'super-admin') {
+        const formal = allAreasData.map(a => a.id);
+        const inferred = allTasks.map(t => t.area).filter(a => a && a !== 'Sem Área');
+        allowedAreas = [...new Set([...formal, ...inferred])].sort((a, b) => a.localeCompare(b));
+    } else { 
+        allowedAreas = managedAreas.sort((a, b) => a.localeCompare(b)); 
+    }
+    
     if(areaSelect) {
-        let allowedAreas = [];
-        if (currentUserRole === 'super-admin') {
-            const formal = allAreasData.map(a => a.id);
-            const inferred = allTasks.map(t => t.area).filter(a => a && a !== 'Sem Área');
-            allowedAreas = [...new Set([...formal, ...inferred])].sort((a, b) => a.localeCompare(b));
-        } else { allowedAreas = managedAreas.sort((a, b) => a.localeCompare(b)); }
         areaSelect.innerHTML = '<option value="">Selecione a Área...</option>' + allowedAreas.map(a => `<option value="${a}">${a}</option>`).join('');
     }
 
-    const projList = document.getElementById('projectsList');
-    if(projList) projList.innerHTML = managedProjects.sort((a, b) => a.localeCompare(b)).map(p => `<option value="${p}">`).join(''); 
-    
-    const filter = document.getElementById('filterProject');
-    const tasks = getVisibleTasksBoard();
+    // Injeta os Filtros no Operacional
+    const filterAreaOp = document.getElementById('filterAreaOp');
+    if(filterAreaOp) {
+        const currArea = filterAreaOp.value;
+        filterAreaOp.innerHTML = '<option value="geral">Todas as Áreas</option>' + allowedAreas.map(a => `<option value="${a}">${a}</option>`).join('');
+        if(currArea && allowedAreas.includes(currArea)) filterAreaOp.value = currArea;
+    }
+
+    updateOpProjectFilter(); // Dispara o gatilho da cascata Operacional
+}
+
+// O MOTOR CASCATA DA ABA OPERACIONAL
+function updateOpProjectFilter() {
+    const filterAreaOp = document.getElementById('filterAreaOp');
+    const filterProjectOp = document.getElementById('filterProjectOp');
+    if(!filterAreaOp || !filterProjectOp) return;
+
+    const selectedArea = filterAreaOp.value;
+    let tasks = getVisibleTasksBoard();
+
+    if (selectedArea !== 'geral') {
+        tasks = tasks.filter(t => (t.area || 'Sem Área') === selectedArea);
+    }
+
     const projects = [...new Set(tasks.map(t => t.project))].sort((a, b) => a.localeCompare(b));
-    const curr = filter.value;
-    filter.innerHTML = '<option value="geral">Todos os Projetos</option>' + projects.map(p => `<option value="${p}">${p}</option>`).join('');
-    if(curr && projects.includes(curr)) filter.value = curr;
+    const currProj = filterProjectOp.value;
+
+    filterProjectOp.innerHTML = '<option value="geral">Todos os Projetos</option>' + projects.map(p => `<option value="${p}">${p}</option>`).join('');
+    if(currProj && projects.includes(currProj)) filterProjectOp.value = currProj;
+
+    renderDashboard(); 
+}
+
+function getFilteredOperationalTasks() {
+    const tasks = getVisibleTasksBoard();
+    const selectedArea = document.getElementById('filterAreaOp')?.value || 'geral';
+    const selectedProject = document.getElementById('filterProjectOp')?.value || 'geral';
+
+    return tasks.filter(t => {
+        const matchArea = selectedArea === 'geral' || (t.area || 'Sem Área') === selectedArea;
+        const matchProj = selectedProject === 'geral' || t.project === selectedProject;
+        return matchArea && matchProj;
+    });
 }
 
 function renderDashboard() {
-    const tasks = getVisibleTasksBoard();
-    const selected = document.getElementById('filterProject').value;
-    const filtered = selected === 'geral' ? tasks : tasks.filter(t => t.project === selected);
-    
-    const todayZero = new Date(); 
-    todayZero.setHours(0,0,0,0); // Correção: a variável certa sendo zerada
+    const filtered = getFilteredOperationalTasks();
+    const todayZero = new Date(); todayZero.setHours(0,0,0,0);
 
     const stats = {
         total: filtered.length,
@@ -432,22 +437,18 @@ function renderDashboard() {
         <div class="stat-card shadow" style="border-left:4px solid #f59e0b"><h3>${stats.pendentes}</h3><p>Aguardando Validação</p></div>
         <div class="stat-card shadow" style="border-left:4px solid #10b981"><h3>${stats.concluidas}</h3><p>Concluídas</p></div>`;
 
-    renderBoard();
+    renderBoard(filtered);
 }
 
-function renderBoard() {
+function renderBoard(filteredTasks) {
     const board = document.getElementById('projectsBoard');
-    const tasks = getVisibleTasksBoard();
-    const selected = document.getElementById('filterProject').value;
-    const filtered = selected === 'geral' ? tasks : tasks.filter(t => t.project === selected);
-    
-    if (filtered.length === 0) {
+    if (filteredTasks.length === 0) {
         board.innerHTML = '<p style="padding: 30px; text-align: center; color: #888;">Nenhuma demanda encontrada.</p>';
         return;
     }
 
     const grouped = {};
-    filtered.forEach(t => { if (!grouped[t.project]) grouped[t.project] = []; grouped[t.project].push(t); });
+    filteredTasks.forEach(t => { if (!grouped[t.project]) grouped[t.project] = []; grouped[t.project].push(t); });
 
     let html = '';
     Object.keys(grouped).sort((a, b) => a.localeCompare(b)).forEach(projName => {
@@ -469,6 +470,8 @@ function renderBoard() {
 }
 
 function abrirModal(id) {
+    closeDrilldown(); // GARANTE QUE SE ESTIVER VINDO DO BI, O DRILLDOWN FECHA PRIMEIRO
+
     currentTaskId = id;
     const t = allTasks.find(x => x.id === id);
     document.getElementById('taskModal').classList.add('active');
@@ -486,8 +489,17 @@ function abrirModal(id) {
     document.getElementById('editDateEnd').disabled = !isGestorPleno;
     document.getElementById('editDesc').value = t.descricao || "";
     
-    // Status Manual Controlado pela Lógica
-    document.getElementById('editStatus').value = t.status;
+    // A RECONSTRUÇÃO DO SELECT PARA BLINDAR O NAVEGADOR
+    const statusSelect = document.getElementById('editStatus');
+    statusSelect.innerHTML = `
+        <option value="fazer">Não Iniciada</option>
+        <option value="andamento">Em Execução</option>
+        <option value="aprovacao">Aguardando Validação</option>
+    `;
+    if (isGestorPleno || t.status === 'concluido') {
+        statusSelect.innerHTML += `<option value="concluido">Concluída</option>`;
+    }
+    statusSelect.value = t.status;
     
     const containerResps = document.getElementById('edit-responsaveis-container');
     containerResps.innerHTML = ''; 
@@ -497,7 +509,6 @@ function abrirModal(id) {
     document.querySelectorAll('#edit-responsaveis-container select').forEach(sel => sel.disabled = !isGestorPleno);
     document.querySelectorAll('.btn-remove-resp').forEach(btn => btn.style.display = isGestorPleno ? 'inline-block' : 'none');
 
-    document.getElementById('opt-concluido').style.display = isGestorPleno ? 'block' : 'none';
     document.getElementById('btn-delete-task').style.display = isGestorPleno ? 'inline-block' : 'none';
     
     const hist = document.getElementById('modalHistorico');
@@ -506,7 +517,6 @@ function abrirModal(id) {
 
 function closeModal() { document.getElementById('taskModal').classList.remove('active'); }
 
-// FECHAMENTO UNIVERSAL AO CLICAR FORA (ESC + Click Outside)
 document.addEventListener('keydown', (e) => { 
     if(e.key === "Escape") { closeModal(); if (typeof closeDrilldown === "function") closeDrilldown(); } 
 });
@@ -678,7 +688,6 @@ function renderNativeBI() {
         });
     } else { currentFilteredTasks = baseTasks; }
 
-    // MATEMÁTICA LÓGICA DE KPIs (6 STATUS)
     let kpis = { total: currentFilteredTasks.length, nao_iniciada: 0, atrasada: 0, execucao: 0, aguardando: 0, critica: 0, concluidas: 0 };
 
     currentFilteredTasks.forEach(t => {
@@ -762,7 +771,6 @@ function openDrilldown(type) {
 
     if (type === 'total') { title.innerText = "Detalhamento: Total de Demandas"; targetTasks = currentFilteredTasks; }
     else {
-        // Usa o motor lógico para o Drilldown bater com o KPI
         const categoryMap = {
             'nao_iniciada': 'Demandas Não Iniciadas',
             'atrasada': 'Atrasadas para Iniciar',
@@ -779,7 +787,15 @@ function openDrilldown(type) {
         tbody.innerHTML = targetTasks.map(t => {
             const respNames = t.resps && t.resps.length > 0 ? t.resps.map(r => r.nome.split(' ')[0]).join(', ') : '-';
             const cStatus = getCalculatedStatus(t);
-            return `<tr><td style="font-size:11px; color:#666;">${t.area || '-'}</td><td class="bold">${t.project}</td><td>${t.text}</td><td>${t.data_fim ? t.data_fim.split('-').reverse().join('/') : 'N/D'}</td><td>${respNames}</td><td><span class="status-pill ${cStatus.class}">${cStatus.label}</span></td></tr>`;
+            // O GRANDE TRUQUE DE COMANDO: O Drilldown agora é clicável e fecha antes de abrir o modal.
+            return `<tr onclick="abrirModal('${t.id}')" style="cursor:pointer" title="Clique para editar a Demanda">
+                <td style="font-size:11px; color:#666;">${t.area || '-'}</td>
+                <td class="bold">${t.project}</td>
+                <td>${t.text}</td>
+                <td>${t.data_fim ? t.data_fim.split('-').reverse().join('/') : 'N/D'}</td>
+                <td>${respNames}</td>
+                <td><span class="status-pill ${cStatus.class}">${cStatus.label}</span></td>
+            </tr>`;
         }).join('');
     }
     modal.classList.add('active');
