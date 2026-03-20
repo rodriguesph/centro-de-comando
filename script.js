@@ -202,83 +202,130 @@ async function deleteTask() { if(confirm("Excluir?")) { await db.collection('tar
 // ==========================================================================
 // BUSINESS INTELLIGENCE NATIVO (V5.2)
 // ==========================================================================
+// ==========================================================================
+// BUSINESS INTELLIGENCE NATIVO (V5.3 - EXECUTIVE)
+// ==========================================================================
 let biChartProgress = null;
 let biChartTeam = null;
+let currentFilteredTasks = []; // Guarda as tarefas filtradas para o Drilldown
 
-// Popula o filtro múltiplo do BI sempre que os dados carregam
+// 1. LÓGICA DO FILTRO SUSPENSO
+function toggleFilterMenu() {
+    document.getElementById('filter-checkboxes').classList.toggle('show');
+}
+
+// Fecha o menu se clicar fora
+window.onclick = function(event) {
+    if (!event.target.matches('.dropdown-btn') && !event.target.closest('.dropdown-content')) {
+        const dropdowns = document.getElementsByClassName("dropdown-content");
+        for (let i = 0; i < dropdowns.length; i++) {
+            if (dropdowns[i].classList.contains('show')) dropdowns[i].classList.remove('show');
+        }
+    }
+}
+
 function updateBIProjectFilter() {
-    const filter = document.getElementById('biProjectFilter');
-    if(!filter) return;
+    const container = document.getElementById('filter-checkboxes');
+    if(!container) return;
     
-    // Salva seleções atuais para não perder ao atualizar
-    const selectedOptions = Array.from(filter.selectedOptions).map(opt => opt.value);
-    
+    // Pega as opções selecionadas atualmente
+    const checkedBoxes = Array.from(document.querySelectorAll('.bi-proj-check:checked')).map(cb => cb.value);
     const projects = [...new Set(allTasks.map(t => t.project))].sort();
     
-    // Se estiver vazio, adiciona a opção "Todos"
-    filter.innerHTML = `<option value="ALL" ${selectedOptions.length === 0 || selectedOptions.includes('ALL') ? 'selected' : ''}>[ TODOS OS PROJETOS ]</option>`;
+    let html = `
+        <label class="checkbox-item">
+            <input type="checkbox" id="check-all-proj" onchange="toggleAllProjects(this)" ${checkedBoxes.length === 0 || checkedBoxes.includes('ALL') ? 'checked' : ''}>
+            <strong>[ TODOS OS PROJETOS ]</strong>
+        </label>
+    `;
+    
     projects.forEach(p => {
-        const isSelected = selectedOptions.includes(p) ? 'selected' : '';
-        filter.innerHTML += `<option value="${p}" ${isSelected}>${p}</option>`;
+        const isChecked = checkedBoxes.includes(p) || (checkedBoxes.length === 0 && document.getElementById('check-all-proj')?.checked) ? 'checked' : '';
+        html += `
+            <label class="checkbox-item">
+                <input type="checkbox" class="bi-proj-check" value="${p}" onchange="renderNativeBI()" ${isChecked}>
+                ${p}
+            </label>
+        `;
     });
+    
+    container.innerHTML = html;
+}
+
+function toggleAllProjects(masterCheckbox) {
+    const checkboxes = document.querySelectorAll('.bi-proj-check');
+    checkboxes.forEach(cb => cb.checked = masterCheckbox.checked);
+    renderNativeBI();
 }
 
 function renderNativeBI() {
-    const filter = document.getElementById('biProjectFilter');
-    if(!filter) return;
-
-    const selectedProjects = Array.from(filter.selectedOptions).map(opt => opt.value);
-    let filteredTasks = allTasks;
-
-    // Se não for "ALL" e tiver algo selecionado, filtra
-    if (!selectedProjects.includes('ALL') && selectedProjects.length > 0) {
-        filteredTasks = allTasks.filter(t => selectedProjects.includes(t.project));
+    const masterCheck = document.getElementById('check-all-proj');
+    const checkboxes = Array.from(document.querySelectorAll('.bi-proj-check:checked')).map(cb => cb.value);
+    
+    // Atualiza o texto do botão
+    const btnText = document.getElementById('btn-filter-toggle');
+    if (masterCheck && masterCheck.checked) {
+        btnText.innerText = "[ TODOS OS PROJETOS ] ▾";
+        currentFilteredTasks = allTasks;
+    } else if (checkboxes.length > 0) {
+        btnText.innerText = `${checkboxes.length} PROJETO(S) SELECIONADO(S) ▾`;
+        currentFilteredTasks = allTasks.filter(t => checkboxes.includes(t.project));
+    } else {
+        btnText.innerText = "NENHUM PROJETO ▾";
+        currentFilteredTasks = [];
     }
 
-    // 1. CÁLCULO DE KPIs (A Lógica que você exigiu)
+    // CÁLCULO DE KPIs
     const today = new Date();
     today.setHours(0,0,0,0);
     
-    let naoIniciadas = 0, emExecucao = 0, emAtraso = 0, andamentoPuro = 0;
+    let kpis = { total: currentFilteredTasks.length, nao_iniciada: 0, execucao: 0, atraso: 0 };
 
-    filteredTasks.forEach(t => {
+    currentFilteredTasks.forEach(t => {
         const dInicio = t.data_inicio ? new Date(t.data_inicio + 'T00:00:00') : null;
         const dFim = t.data_fim ? new Date(t.data_fim + 'T00:00:00') : null;
 
-        // Não iniciada: Prazo de inicio passou e status não mudou
-        if (dInicio && dInicio < today && t.status === 'fazer') naoIniciadas++;
-        
-        // Em execução: Prazo passou E já houve alteração de status
-        if (dInicio && dInicio <= today && t.status !== 'fazer') emExecucao++;
-        
-        // Atraso: Prazo final passou e não concluiu
-        if (dFim && dFim < today && t.status !== 'concluido') emAtraso++;
-
-        if (t.status === 'andamento') andamentoPuro++;
+        if (dInicio && dInicio < today && t.status === 'fazer') kpis.nao_iniciada++;
+        if (dInicio && dInicio <= today && t.status !== 'fazer') kpis.execucao++;
+        if (dFim && dFim < today && t.status !== 'concluido') kpis.atraso++;
     });
 
-    document.getElementById('bi-kpi-total').innerText = filteredTasks.length;
-    document.getElementById('bi-kpi-nao-iniciada').innerText = naoIniciadas;
-    document.getElementById('bi-kpi-execucao').innerText = emExecucao;
-    document.getElementById('bi-kpi-atraso').innerText = emAtraso;
+    document.getElementById('bi-kpi-total').innerText = kpis.total;
+    document.getElementById('bi-kpi-nao-iniciada').innerText = kpis.nao_iniciada;
+    document.getElementById('bi-kpi-execucao').innerText = kpis.execucao;
+    document.getElementById('bi-kpi-atraso').innerText = kpis.atraso;
 
-    // 2. GRÁFICO: Planejado x Executado
-    const concluidas = filteredTasks.filter(t => t.status === 'concluido').length;
-    const pendentes = filteredTasks.length - concluidas;
+    // GRÁFICO: Progresso (COM PERCENTUAL)
+    const concluidas = currentFilteredTasks.filter(t => t.status === 'concluido').length;
+    const pendentes = kpis.total - concluidas;
 
     if(biChartProgress) biChartProgress.destroy();
     biChartProgress = new Chart(document.getElementById('biProgressChart'), {
         type: 'doughnut',
         data: {
-            labels: ['Executado (Concluído)', 'Planejado (Pendente)'],
-            datasets: [{ data: [concluidas, pendentes], backgroundColor: ['#000000', '#e2e8f0'] }]
+            labels: ['Concluído', 'Pendente'],
+            datasets: [{ data: [concluidas, pendentes], backgroundColor: ['#10b981', '#1e293b'] }]
         },
-        options: { responsive: true, maintainAspectRatio: false, cutout: '70%' }
+        options: { 
+            responsive: true, maintainAspectRatio: false, cutout: '65%',
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let val = context.parsed;
+                            let total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            let perc = total > 0 ? Math.round((val / total) * 100) : 0;
+                            return ` ${context.label}: ${val} tarefa(s) (${perc}%)`;
+                        }
+                    }
+                }
+            }
+        }
     });
 
-    // 3. GRÁFICO: Carga de Trabalho por Pessoa
+    // GRÁFICO: Carga da Equipe
     const teamLoad = {};
-    filteredTasks.forEach(t => {
+    currentFilteredTasks.forEach(t => {
         const resp = t.resps && t.resps[0] ? t.resps[0].nome.split(' ')[0] : 'Sem Dono';
         teamLoad[resp] = (teamLoad[resp] || 0) + 1;
     });
@@ -288,13 +335,115 @@ function renderNativeBI() {
         type: 'bar',
         data: {
             labels: Object.keys(teamLoad),
-            datasets: [{ label: 'Tarefas Atribuídas', data: Object.values(teamLoad), backgroundColor: '#000000' }]
+            datasets: [{ label: 'Tarefas Atribuídas', data: Object.values(teamLoad), backgroundColor: '#0f172a', borderRadius: 4 }]
         },
-        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+        options: { responsive: true, maintainAspectRatio: false }
     });
 
-    // 4. CRONOGRAMA DE EXECUÇÃO (GANTT NATIVO)
-    drawGantt(filteredTasks);
+    // GERAÇÃO DO GANTT EXECUTIVO
+    drawExecutiveGantt(currentFilteredTasks);
+}
+
+// 2. O NOVO GANTT EM FORMATO DE TABELA
+function drawExecutiveGantt(tasks) {
+    const tbody = document.getElementById('bi-gantt-body');
+    tbody.innerHTML = '';
+
+    const gTasks = tasks.filter(t => t.data_inicio && t.data_fim);
+    if(gTasks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="2" style="text-align:center; color:#888;">Nenhum cronograma definido para esta seleção.</td></tr>';
+        return;
+    }
+
+    let minDate = new Date(Math.min(...gTasks.map(t => new Date(t.data_inicio + 'T00:00:00'))));
+    let maxDate = new Date(Math.max(...gTasks.map(t => new Date(t.data_fim + 'T00:00:00'))));
+    minDate.setDate(minDate.getDate() - 1); // Margem visual
+    maxDate.setDate(maxDate.getDate() + 1);
+    const totalDuration = maxDate - minDate;
+
+    let html = '';
+    gTasks.forEach(t => {
+        const start = new Date(t.data_inicio + 'T00:00:00');
+        const end = new Date(t.data_fim + 'T00:00:00');
+        const today = new Date(); today.setHours(0,0,0,0);
+
+        const leftPerc = ((start - minDate) / totalDuration) * 100;
+        const widthPerc = Math.max(((end - start) / totalDuration) * 100, 2);
+
+        let barClass = '';
+        if(t.status === 'concluido') barClass = 'concluido';
+        else if(end < today) barClass = 'atrasado';
+
+        // Formatação de data visual BR
+        const fStart = start.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'});
+        const fEnd = end.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'});
+        const respName = t.resps && t.resps[0] ? t.resps[0].nome.split(' ')[0] : '-';
+
+        html += `
+            <tr>
+                <td>
+                    <strong style="font-size: 13px;">${t.text}</strong><br>
+                    <small style="color:#64748b;">[${t.project}] • Resp: ${respName}</small>
+                </td>
+                <td>
+                    <div class="gantt-track">
+                        <div class="gantt-bar-fill ${barClass}" style="left: ${leftPerc}%; width: ${widthPerc}%;">
+                            <span>📅 ${fStart} até ${fEnd} • ${t.perc_desenvolvimento || 0}%</span>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+    tbody.innerHTML = html;
+}
+
+// 3. LÓGICA DE DRILL-DOWN (RAIO-X DOS KPIs)
+function openDrilldown(type) {
+    const modal = document.getElementById('drilldownModal');
+    const tbody = document.getElementById('drilldownBody');
+    const title = document.getElementById('drilldownTitle');
+    
+    let targetTasks = [];
+    const today = new Date(); today.setHours(0,0,0,0);
+
+    if (type === 'total') {
+        title.innerText = "Detalhamento: Total de Demandas";
+        targetTasks = currentFilteredTasks;
+    } else if (type === 'nao_iniciada') {
+        title.innerText = "Detalhamento: Demandas Não Iniciadas (Com Atraso no Start)";
+        targetTasks = currentFilteredTasks.filter(t => t.data_inicio && new Date(t.data_inicio + 'T00:00:00') < today && t.status === 'fazer');
+    } else if (type === 'execucao') {
+        title.innerText = "Detalhamento: Demandas Em Execução";
+        targetTasks = currentFilteredTasks.filter(t => t.data_inicio && new Date(t.data_inicio + 'T00:00:00') <= today && t.status !== 'fazer');
+    } else if (type === 'atraso') {
+        title.innerText = "Detalhamento: Demandas com Prazo Vencido";
+        targetTasks = currentFilteredTasks.filter(t => t.data_fim && new Date(t.data_fim + 'T00:00:00') < today && t.status !== 'concluido');
+    }
+
+    if (targetTasks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Nenhuma tarefa encontrada neste recorte.</td></tr>';
+    } else {
+        tbody.innerHTML = targetTasks.map(t => {
+            const resp = t.resps && t.resps[0] ? t.resps[0].nome : 'Sem Responsável';
+            const sClass = `status-${t.status === 'concluido' ? 'concluido' : (t.status === 'aprovacao' ? 'andamento' : 'fazer')}`;
+            return `
+                <tr>
+                    <td class="bold">${t.project}</td>
+                    <td>${t.text}</td>
+                    <td>${t.data_fim ? t.data_fim.split('-').reverse().join('/') : 'N/D'}</td>
+                    <td>${resp}</td>
+                    <td><span class="status-pill ${sClass}">${t.status.toUpperCase()}</span></td>
+                </tr>
+            `;
+        }).join('');
+    }
+    
+    modal.classList.add('active');
+}
+
+function closeDrilldown() {
+    document.getElementById('drilldownModal').classList.remove('active');
 }
 
 function drawGantt(tasks) {

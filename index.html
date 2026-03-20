@@ -57,49 +57,94 @@
         <main class="main-content">
             <section id="sec-dashboard-bi" class="content-section active">
                 <div class="section-header">
-                    <h2>Business Intelligence (Live)</h2>
-                    <div class="bi-filter-container">
-                        <label style="font-size: 10px; font-weight: bold; text-transform: uppercase;">Filtrar Projetos (Ctrl+Click para vários):</label>
-                        <select id="biProjectFilter" multiple class="shadow" onchange="renderNativeBI()"></select>
+                    <h2>Business Intelligence</h2>
+                    <div class="custom-filter-container">
+                        <label>Projetos em Análise:</label>
+                        <div class="dropdown-wrapper">
+                            <button id="btn-filter-toggle" class="dropdown-btn shadow" onclick="toggleFilterMenu()">[ TODOS OS PROJETOS ] ▾</button>
+                            <div id="filter-checkboxes" class="dropdown-content shadow">
+                                </div>
+                        </div>
                     </div>
                 </div>
 
                 <div class="stats-grid bi-kpis">
-                    <div class="stat-card shadow">
+                    <div class="stat-card shadow clickable" onclick="openDrilldown('total')">
                         <h3 id="bi-kpi-total">0</h3>
-                        <p>Total de Tarefas</p>
+                        <p>Total de Demandas</p>
+                        <small class="click-hint">Clique para detalhar ↗</small>
                     </div>
-                    <div class="stat-card shadow" style="border-left: 4px solid #f59e0b;">
+                    <div class="stat-card shadow clickable" style="border-left: 4px solid #f59e0b;" onclick="openDrilldown('nao_iniciada')">
                         <h3 id="bi-kpi-nao-iniciada">0</h3>
-                        <p>Não Iniciadas (Atraso de Início)</p>
+                        <p>Não Iniciadas</p>
+                        <small class="click-hint">Clique para detalhar ↗</small>
                     </div>
-                    <div class="stat-card shadow" style="border-left: 4px solid #3b82f6;">
+                    <div class="stat-card shadow clickable" style="border-left: 4px solid #3b82f6;" onclick="openDrilldown('execucao')">
                         <h3 id="bi-kpi-execucao">0</h3>
-                        <p>Em Execução (Iniciadas)</p>
+                        <p>Em Execução</p>
+                        <small class="click-hint">Clique para detalhar ↗</small>
                     </div>
-                    <div class="stat-card shadow" style="border-left: 4px solid #dc3545;">
+                    <div class="stat-card shadow clickable" style="border-left: 4px solid #dc3545;" onclick="openDrilldown('atraso')">
                         <h3 id="bi-kpi-atraso">0</h3>
-                        <p>Em Atraso (Prazo Vencido)</p>
+                        <p>Atrasadas</p>
+                        <small class="click-hint">Clique para detalhar ↗</small>
                     </div>
                 </div>
 
                 <div class="bi-charts-row">
                     <div class="bi-chart-card shadow">
-                        <h4>Progresso Geral (Planejado x Executado)</h4>
+                        <h4>Progresso Geral</h4>
                         <div class="canvas-container"><canvas id="biProgressChart"></canvas></div>
                     </div>
                     <div class="bi-chart-card shadow">
-                        <h4>Carga de Trabalho por Membro</h4>
+                        <h4>Volume por Responsável</h4>
                         <div class="canvas-container"><canvas id="biTeamChart"></canvas></div>
                     </div>
                 </div>
 
                 <div class="bi-gantt-card shadow">
-                    <h4>Cronograma de Execução (Gantt)</h4>
-                    <div id="bi-gantt-container" class="gantt-wrapper">
-                        </div>
+                    <h4>Cronograma Mestre de Execução</h4>
+                    <div class="table-container">
+                        <table class="gantt-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 30%;">Demanda / Projeto</th>
+                                    <th style="width: 70%;">Linha do Tempo (Início ➝ Fim)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bi-gantt-body">
+                                </tbody>
+                        </table>
+                    </div>
                 </div>
             </section>
+
+<div id="drilldownModal" class="modal">
+        <div class="modal-content shadow" style="max-width: 900px;">
+            <div class="modal-header">
+                <h3 id="drilldownTitle">Detalhamento Analítico</h3>
+                <button onclick="closeDrilldown()" class="close-btn">&times;</button>
+            </div>
+            <div class="table-container" style="max-height: 50vh; overflow-y: auto; margin-top: 15px;">
+                <table style="width: 100%;">
+                    <thead>
+                        <tr>
+                            <th>Projeto</th>
+                            <th>Tarefa</th>
+                            <th>Prazo Final</th>
+                            <th>Responsável</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="drilldownBody">
+                        </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeDrilldown()" class="btn-secondary">Fechar Raio-X</button>
+            </div>
+        </div>
+    </div>
 
             <section id="sec-acompanhamento" class="content-section">
                 <div class="section-header">
