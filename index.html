@@ -55,6 +55,7 @@
         </nav>
 
         <main class="main-content">
+            
             <section id="sec-dashboard-bi" class="content-section active">
                 <div class="section-header">
                     <h2>Business Intelligence</h2>
@@ -119,7 +120,81 @@
                 </div>
             </section>
 
-<div id="drilldownModal" class="modal">
+            <section id="sec-novo-projeto" class="content-section">
+                <div class="form-container shadow">
+                    <h3>Inclusão de Demanda</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Área Estratégica</label>
+                            <select id="areaSelect">
+                                <option value="Coordenação">Coordenação</option>
+                                <option value="Docência">Docência</option>
+                                <option value="DEA">DEA</option>
+                                <option value="Pessoal">Pessoal</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Projeto</label>
+                            <input type="text" id="projectInput" list="projectsList" placeholder="Ex: C.A.F.E. 2026">
+                            <datalist id="projectsList"></datalist>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Título da Tarefa</label>
+                        <input type="text" id="taskTitle">
+                    </div>
+                    <div class="form-group">
+                        <label>Escopo Detalhado</label>
+                        <textarea id="taskDesc" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Equipe e Papel nesta Demanda</label>
+                        <div id="responsaveis-container">
+                            <div class="resp-row" style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                <select class="resp-select" style="flex: 2;"><option value="">Carregando...</option></select>
+                                <select class="resp-role" style="flex: 1;">
+                                    <option value="executor">Executor</option>
+                                    <option value="gestor">Gestor do Projeto</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button onclick="addResponsavelField()" class="btn-text">+ Adicionar Envolvido</button>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group"><label>Início</label><input type="date" id="dateInputStart"></div>
+                        <div class="form-group"><label>Prazo Final</label><input type="date" id="dateInputEnd"></div>
+                    </div>
+                    <button onclick="saveDemand()" class="btn-primary" style="width: 100%; margin-top: 20px;">LANÇAR DEMANDA</button>
+                </div>
+            </section>
+
+            <section id="sec-acompanhamento" class="content-section">
+                <div class="section-header">
+                    <h2>Visão Operacional</h2>
+                    <select id="filterProject" onchange="renderDashboard()" class="select-filter" style="width: 250px; padding: 8px;"></select>
+                </div>
+                <div id="stats-grid" class="stats-grid"></div>
+                <div id="projectsBoard" class="table-container shadow"></div>
+            </section>
+
+            <section id="sec-usuarios" class="content-section">
+                <div class="form-container shadow">
+                    <h3>Credenciar Novo Membro</h3>
+                    <div class="form-grid">
+                        <input type="text" id="novoUserNome" placeholder="Nome Completo">
+                        <input type="email" id="novoUserEmail" placeholder="E-mail Google">
+                    </div>
+                    <button onclick="cadastrarUsuario()" class="btn-primary" style="margin-top: 10px;">LIBERAR ACESSO</button>
+                </div>
+                <h3 style="margin-top: 40px;">Membros Ativos</h3>
+                <div id="lista-usuarios-board"></div>
+            </section>
+        </main>
+    </div>
+
+    <div id="drilldownModal" class="modal">
         <div class="modal-content shadow" style="max-width: 900px;">
             <div class="modal-header">
                 <h3 id="drilldownTitle">Detalhamento Analítico</h3>
@@ -144,34 +219,6 @@
                 <button onclick="closeDrilldown()" class="btn-secondary">Fechar Raio-X</button>
             </div>
         </div>
-    </div>
-
-            <section id="sec-acompanhamento" class="content-section">
-                <div class="section-header">
-                    <h2>Visão Operacional</h2>
-                    <select id="filterProject" onchange="renderDashboard()" class="select-filter" style="width: 250px; padding: 8px;"></select>
-                </div>
-                <div id="stats-grid" class="stats-grid"></div>
-                <div id="projectsBoard" class="table-container shadow"></div>
-            </section>
-
-            <section id="sec-usuarios" class="content-section">
-                <div class="form-container shadow">
-                    <h3>Credenciar Novo Membro</h3>
-                    <div class="form-grid">
-                        <input type="text" id="novoUserNome" placeholder="Nome Completo">
-                        <input type="email" id="novoUserEmail" placeholder="E-mail Google">
-                        <select id="novoUserPapel">
-                            <option value="executor">Executor</option>
-                            <option value="gestor">Gestor</option>
-                        </select>
-                    </div>
-                    <button onclick="cadastrarUsuario()" class="btn-primary" style="margin-top: 10px;">LIBERAR ACESSO</button>
-                </div>
-                <h3 style="margin-top: 40px;">Membros Ativos</h3>
-                <div id="lista-usuarios-board"></div>
-            </section>
-        </main>
     </div>
 
     <div id="taskModal" class="modal">
