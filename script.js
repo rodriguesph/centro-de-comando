@@ -732,4 +732,4 @@ function openDrilldown(type) {
     modal.classList.add('active');
 }
 
-function closeDrilldown() { document.getElementById('drilldownModal').
+function closeDrilldown() { document.getElementById('drilldownModal').classList.remove('active'); }
