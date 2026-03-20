@@ -48,22 +48,6 @@ auth.onAuthStateChanged(async user => {
 function logout() { auth.signOut(); }
 document.getElementById('login-btn').onclick = () => auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
 
-// BI
-function initializeBI() {
-    const iframe = document.getElementById('bi-iframe');
-    // Se o iframe existir e ainda estiver vazio, injeta a URL
-    if(iframe && (iframe.src === "" || iframe.src === window.location.href)) {
-        console.log("Iniciando carregamento do BI...");
-        iframe.src = LOOKER_STUDIO_EMBED_URL;
-    }
-}
-
-// Forçar carregamento inicial assim que o script rodar
-window.onload = () => {
-    if(document.getElementById('sec-dashboard-bi').classList.contains('active')) {
-        initializeBI();
-    }
-};
 
 // DADOS
 function loadData() {
@@ -72,6 +56,10 @@ function loadData() {
         updateProjectList();
         renderDashboard();
         renderBoard();
+        
+        // AS DUAS LINHAS NOVAS QUE INICIAM O BI:
+        updateBIProjectFilter(); 
+        renderNativeBI();
     });
 }
 
@@ -211,3 +199,150 @@ async function saveDemand() {
 }
 
 async function deleteTask() { if(confirm("Excluir?")) { await db.collection('tarefas').doc(currentTaskId).delete(); closeModal(); } }
+// ==========================================================================
+// BUSINESS INTELLIGENCE NATIVO (V5.2)
+// ==========================================================================
+let biChartProgress = null;
+let biChartTeam = null;
+
+// Popula o filtro múltiplo do BI sempre que os dados carregam
+function updateBIProjectFilter() {
+    const filter = document.getElementById('biProjectFilter');
+    if(!filter) return;
+    
+    // Salva seleções atuais para não perder ao atualizar
+    const selectedOptions = Array.from(filter.selectedOptions).map(opt => opt.value);
+    
+    const projects = [...new Set(allTasks.map(t => t.project))].sort();
+    
+    // Se estiver vazio, adiciona a opção "Todos"
+    filter.innerHTML = `<option value="ALL" ${selectedOptions.length === 0 || selectedOptions.includes('ALL') ? 'selected' : ''}>[ TODOS OS PROJETOS ]</option>`;
+    projects.forEach(p => {
+        const isSelected = selectedOptions.includes(p) ? 'selected' : '';
+        filter.innerHTML += `<option value="${p}" ${isSelected}>${p}</option>`;
+    });
+}
+
+function renderNativeBI() {
+    const filter = document.getElementById('biProjectFilter');
+    if(!filter) return;
+
+    const selectedProjects = Array.from(filter.selectedOptions).map(opt => opt.value);
+    let filteredTasks = allTasks;
+
+    // Se não for "ALL" e tiver algo selecionado, filtra
+    if (!selectedProjects.includes('ALL') && selectedProjects.length > 0) {
+        filteredTasks = allTasks.filter(t => selectedProjects.includes(t.project));
+    }
+
+    // 1. CÁLCULO DE KPIs (A Lógica que você exigiu)
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    let naoIniciadas = 0, emExecucao = 0, emAtraso = 0, andamentoPuro = 0;
+
+    filteredTasks.forEach(t => {
+        const dInicio = t.data_inicio ? new Date(t.data_inicio + 'T00:00:00') : null;
+        const dFim = t.data_fim ? new Date(t.data_fim + 'T00:00:00') : null;
+
+        // Não iniciada: Prazo de inicio passou e status não mudou
+        if (dInicio && dInicio < today && t.status === 'fazer') naoIniciadas++;
+        
+        // Em execução: Prazo passou E já houve alteração de status
+        if (dInicio && dInicio <= today && t.status !== 'fazer') emExecucao++;
+        
+        // Atraso: Prazo final passou e não concluiu
+        if (dFim && dFim < today && t.status !== 'concluido') emAtraso++;
+
+        if (t.status === 'andamento') andamentoPuro++;
+    });
+
+    document.getElementById('bi-kpi-total').innerText = filteredTasks.length;
+    document.getElementById('bi-kpi-nao-iniciada').innerText = naoIniciadas;
+    document.getElementById('bi-kpi-execucao').innerText = emExecucao;
+    document.getElementById('bi-kpi-atraso').innerText = emAtraso;
+
+    // 2. GRÁFICO: Planejado x Executado
+    const concluidas = filteredTasks.filter(t => t.status === 'concluido').length;
+    const pendentes = filteredTasks.length - concluidas;
+
+    if(biChartProgress) biChartProgress.destroy();
+    biChartProgress = new Chart(document.getElementById('biProgressChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Executado (Concluído)', 'Planejado (Pendente)'],
+            datasets: [{ data: [concluidas, pendentes], backgroundColor: ['#000000', '#e2e8f0'] }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '70%' }
+    });
+
+    // 3. GRÁFICO: Carga de Trabalho por Pessoa
+    const teamLoad = {};
+    filteredTasks.forEach(t => {
+        const resp = t.resps && t.resps[0] ? t.resps[0].nome.split(' ')[0] : 'Sem Dono';
+        teamLoad[resp] = (teamLoad[resp] || 0) + 1;
+    });
+
+    if(biChartTeam) biChartTeam.destroy();
+    biChartTeam = new Chart(document.getElementById('biTeamChart'), {
+        type: 'bar',
+        data: {
+            labels: Object.keys(teamLoad),
+            datasets: [{ label: 'Tarefas Atribuídas', data: Object.values(teamLoad), backgroundColor: '#000000' }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+    });
+
+    // 4. CRONOGRAMA DE EXECUÇÃO (GANTT NATIVO)
+    drawGantt(filteredTasks);
+}
+
+function drawGantt(tasks) {
+    const container = document.getElementById('bi-gantt-container');
+    container.innerHTML = '';
+
+    // Filtra tarefas que têm data de início e fim
+    const gTasks = tasks.filter(t => t.data_inicio && t.data_fim);
+    if(gTasks.length === 0) {
+        container.innerHTML = '<p style="color:#888; text-align:center;">Nenhuma tarefa com cronograma definido para os projetos selecionados.</p>';
+        return;
+    }
+
+    // Descobre o limite de tempo (Timeline Total)
+    let minDate = new Date(Math.min(...gTasks.map(t => new Date(t.data_inicio + 'T00:00:00'))));
+    let maxDate = new Date(Math.max(...gTasks.map(t => new Date(t.data_fim + 'T00:00:00'))));
+    
+    // Adiciona uma margem de segurança de 2 dias nas pontas
+    minDate.setDate(minDate.getDate() - 2);
+    maxDate.setDate(maxDate.getDate() + 2);
+    const totalDuration = maxDate - minDate; // em milissegundos
+
+    let html = '';
+    gTasks.forEach(t => {
+        const start = new Date(t.data_inicio + 'T00:00:00');
+        const end = new Date(t.data_fim + 'T00:00:00');
+        const today = new Date();
+        today.setHours(0,0,0,0);
+
+        // Calcula posições percentuais
+        const leftPerc = ((start - minDate) / totalDuration) * 100;
+        const widthPerc = Math.max(((end - start) / totalDuration) * 100, 2); // Mínimo de 2% para tarefas de 1 dia
+
+        let barClass = '';
+        if(t.status === 'concluido') barClass = 'concluido';
+        else if(end < today) barClass = 'atrasado';
+
+        html += `
+            <div class="gantt-row">
+                <div class="gantt-label" title="${t.text}">${t.text}</div>
+                <div class="gantt-timeline">
+                    <div class="gantt-bar ${barClass}" style="left: ${leftPerc}%; width: ${widthPerc}%;">
+                        ${t.perc_desenvolvimento || 0}%
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}

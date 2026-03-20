@@ -55,52 +55,47 @@
         <main class="main-content">
             <section id="sec-dashboard-bi" class="content-section active">
                 <div class="section-header">
-                    <h2>Business Intelligence</h2>
+                    <h2>Business Intelligence (Live)</h2>
+                    <div class="bi-filter-container">
+                        <label style="font-size: 10px; font-weight: bold; text-transform: uppercase;">Filtrar Projetos (Ctrl+Click para vários):</label>
+                        <select id="biProjectFilter" multiple class="shadow" onchange="renderNativeBI()"></select>
+                    </div>
                 </div>
-                <div class="iframe-container shadow">
-                    <iframe id="bi-iframe" src="" frameborder="0" allowfullscreen></iframe>
-                </div>
-            </section>
 
-            <section id="sec-novo-projeto" class="content-section">
-                <div class="form-container shadow">
-                    <h3>Inclusão de Demanda</h3>
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label>Área Estratégica</label>
-                            <select id="areaSelect">
-                                <option value="Coordenação">Coordenação</option>
-                                <option value="Docência">Docência</option>
-                                <option value="DEA">DEA</option>
-                                <option value="Pessoal">Pessoal</option>
-                            </select>
+                <div class="stats-grid bi-kpis">
+                    <div class="stat-card shadow">
+                        <h3 id="bi-kpi-total">0</h3>
+                        <p>Total de Tarefas</p>
+                    </div>
+                    <div class="stat-card shadow" style="border-left: 4px solid #f59e0b;">
+                        <h3 id="bi-kpi-nao-iniciada">0</h3>
+                        <p>Não Iniciadas (Atraso de Início)</p>
+                    </div>
+                    <div class="stat-card shadow" style="border-left: 4px solid #3b82f6;">
+                        <h3 id="bi-kpi-execucao">0</h3>
+                        <p>Em Execução (Iniciadas)</p>
+                    </div>
+                    <div class="stat-card shadow" style="border-left: 4px solid #dc3545;">
+                        <h3 id="bi-kpi-atraso">0</h3>
+                        <p>Em Atraso (Prazo Vencido)</p>
+                    </div>
+                </div>
+
+                <div class="bi-charts-row">
+                    <div class="bi-chart-card shadow">
+                        <h4>Progresso Geral (Planejado x Executado)</h4>
+                        <div class="canvas-container"><canvas id="biProgressChart"></canvas></div>
+                    </div>
+                    <div class="bi-chart-card shadow">
+                        <h4>Carga de Trabalho por Membro</h4>
+                        <div class="canvas-container"><canvas id="biTeamChart"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="bi-gantt-card shadow">
+                    <h4>Cronograma de Execução (Gantt)</h4>
+                    <div id="bi-gantt-container" class="gantt-wrapper">
                         </div>
-                        <div class="form-group">
-                            <label>Projeto</label>
-                            <input type="text" id="projectInput" list="projectsList" placeholder="Ex: C.A.F.E. 2026">
-                            <datalist id="projectsList"></datalist>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Título da Tarefa</label>
-                        <input type="text" id="taskTitle">
-                    </div>
-                    <div class="form-group">
-                        <label>Escopo Detalhado</label>
-                        <textarea id="taskDesc" rows="3"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Responsáveis</label>
-                        <div id="responsaveis-container">
-                            <div class="resp-row"><select class="resp-select"><option value="">Carregando...</option></select></div>
-                        </div>
-                        <button onclick="addResponsavelField()" class="btn-text">+ Adicionar Responsável</button>
-                    </div>
-                    <div class="form-grid">
-                        <div class="form-group"><label>Início</label><input type="date" id="dateInputStart"></div>
-                        <div class="form-group"><label>Prazo Final</label><input type="date" id="dateInputEnd"></div>
-                    </div>
-                    <button onclick="saveDemand()" class="btn-primary" style="width: 100%; margin-top: 20px;">LANÇAR DEMANDA</button>
                 </div>
             </section>
 
