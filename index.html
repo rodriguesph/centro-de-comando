@@ -57,14 +57,26 @@
         <main class="main-content">
             
             <section id="sec-dashboard-bi" class="content-section active">
-                <div class="section-header">
+                <div class="section-header" style="flex-wrap: wrap; gap: 15px;">
                     <h2>Business Intelligence</h2>
-                    <div class="custom-filter-container">
-                        <label>Projetos em Análise:</label>
-                        <div class="dropdown-wrapper">
-                            <button id="btn-filter-toggle" class="dropdown-btn shadow" onclick="toggleFilterMenu()">[ TODOS OS PROJETOS ] ▾</button>
-                            <div id="filter-checkboxes" class="dropdown-content shadow">
-                                </div>
+                    
+                    <div class="bi-filters-row" style="display: flex; gap: 15px; margin-left: auto;">
+                        <div class="custom-filter-container">
+                            <label>Áreas Estratégicas:</label>
+                            <div class="dropdown-wrapper">
+                                <button id="btn-filter-area" class="dropdown-btn shadow" onclick="toggleFilterMenu('area')">[ TODAS AS ÁREAS ] ▾</button>
+                                <div id="filter-checkboxes-area" class="dropdown-content shadow">
+                                    </div>
+                            </div>
+                        </div>
+
+                        <div class="custom-filter-container">
+                            <label>Projetos em Análise:</label>
+                            <div class="dropdown-wrapper">
+                                <button id="btn-filter-proj" class="dropdown-btn shadow" onclick="toggleFilterMenu('proj')">[ TODOS OS PROJETOS ] ▾</button>
+                                <div id="filter-checkboxes-proj" class="dropdown-content shadow">
+                                    </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -126,12 +138,8 @@
                     <div class="form-grid">
                         <div class="form-group">
                             <label>Área Estratégica</label>
-                            <select id="areaSelect">
-                                <option value="Coordenação">Coordenação</option>
-                                <option value="Docência">Docência</option>
-                                <option value="DEA">DEA</option>
-                                <option value="Pessoal">Pessoal</option>
-                            </select>
+                            <input type="text" id="areaInput" list="areaList" placeholder="Ex: Coordenação">
+                            <datalist id="areaList"></datalist>
                         </div>
                         <div class="form-group">
                             <label>Projeto</label>
@@ -204,10 +212,11 @@
                 <table style="width: 100%;">
                     <thead>
                         <tr>
+                            <th>Área</th>
                             <th>Projeto</th>
                             <th>Tarefa</th>
                             <th>Prazo Final</th>
-                            <th>Responsável</th>
+                            <th>Responsáveis</th>
                             <th>Status</th>
                         </tr>
                     </thead>
@@ -227,7 +236,17 @@
                 <h3>Gestão da Demanda</h3>
                 <button onclick="closeModal()" class="close-btn">&times;</button>
             </div>
-            <div class="form-group"><label>Título</label><input type="text" id="editTitle"></div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Área Estratégica</label>
+                    <input type="text" id="editArea" list="areaList">
+                </div>
+                <div class="form-group">
+                    <label>Projeto</label>
+                    <input type="text" id="editProject" list="projectsList">
+                </div>
+            </div>
+            <div class="form-group"><label>Título da Demanda</label><input type="text" id="editTitle"></div>
             <div class="form-group"><label>Escopo Original</label><textarea id="editDesc" rows="3" readonly class="readonly-field"></textarea></div>
             <div class="form-grid">
                 <div class="form-group"><label>Início</label><input type="date" id="editDateStart"></div>

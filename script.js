@@ -83,9 +83,8 @@ function loadData() {
 
         updateNavVisibility();
         updateProjectList();
-        renderDashboard(); // O renderDashboard agora aciona o renderBoard automaticamente
-        updateBIProjectFilter(); 
-        renderNativeBI();
+        renderDashboard(); 
+        updateBIAreaFilter(); // Filtro cascata inicia pela Área
     });
 }
 
@@ -155,6 +154,7 @@ function addResponsavelField() {
 }
 
 async function saveDemand() {
+    const area = document.getElementById('areaInput').value.trim() || "Sem Área"; // Novo Campo
     const project = document.getElementById('projectInput').value.trim();
     const title = document.getElementById('taskTitle').value.trim();
     const desc = document.getElementById('taskDesc').value.trim();
@@ -184,7 +184,7 @@ async function saveDemand() {
     
     try {
         await db.collection('tarefas').add({
-            project, text: title, descricao: desc,
+            area, project, text: title, descricao: desc,
             data_inicio: dateStart, data_fim: dateEnd,
             status: 'fazer', perc_desenvolvimento: 0, resps, criadoEm: new Date(), historico: [], email: resps[0].email
         });
@@ -212,7 +212,7 @@ async function saveDemand() {
 }
 
 // ==========================================================================
-// 6. VISÃO OPERACIONAL E MODAIS (Totalmente Refatorada)
+// 6. VISÃO OPERACIONAL E MODAIS (Edit e Array de Responsáveis)
 // ==========================================================================
 function getVisibleTasksBoard() {
     if (currentUserRole === 'super-admin') return allTasks;
@@ -220,9 +220,15 @@ function getVisibleTasksBoard() {
 }
 
 function updateProjectList() {
-    const datalist = document.getElementById('projectsList');
-    if(datalist) datalist.innerHTML = managedProjects.map(p => `<option value="${p}">`).join(''); 
+    // Atualiza Datalists do Form
+    const projList = document.getElementById('projectsList');
+    if(projList) projList.innerHTML = managedProjects.map(p => `<option value="${p}">`).join(''); 
+    
+    const areaList = document.getElementById('areaList');
+    const allAreas = [...new Set(allTasks.map(t => t.area || 'Sem Área'))].sort();
+    if(areaList) areaList.innerHTML = allAreas.map(a => `<option value="${a}">`).join('');
 
+    // Atualiza Filtro Visão Operacional
     const filter = document.getElementById('filterProject');
     const tasks = getVisibleTasksBoard();
     const projects = [...new Set(tasks.map(t => t.project))].sort();
@@ -250,7 +256,6 @@ function renderDashboard() {
         <div class="stat-card shadow" style="border-left:4px solid #000"><h3>${stats.pendentes}</h3><p>Em Aprovação</p></div>
         <div class="stat-card shadow" style="border-left:4px solid #28a745"><h3>${stats.concluidas}</h3><p>Concluídas</p></div>`;
 
-    // O filtro agora força a atualização da tabela abaixo também
     renderBoard();
 }
 
@@ -265,7 +270,6 @@ function renderBoard() {
         return;
     }
 
-    // Engenharia de Agrupamento por Projeto
     const grouped = {};
     filtered.forEach(t => {
         if (!grouped[t.project]) grouped[t.project] = [];
@@ -275,28 +279,29 @@ function renderBoard() {
     let html = '';
     
     Object.keys(grouped).sort().forEach(projName => {
-        // Cabeçalho do Projeto
+        // Encontra a área do projeto (assume a da primeira tarefa)
+        const projArea = grouped[projName][0].area || 'Sem Área';
         html += `<div style="background: #f8fafc; padding: 12px 20px; border-bottom: 1px solid var(--border-color); margin-top: 15px;">
-                    <h4 style="margin: 0; font-size: 13px; text-transform: uppercase; color: #0f172a; letter-spacing: 0.5px;">📁 ${projName}</h4>
+                    <h4 style="margin: 0; font-size: 13px; text-transform: uppercase; color: #0f172a; letter-spacing: 0.5px;">📁 ${projName} <span style="font-weight:400; color:#64748b; font-size:10px;">(${projArea})</span></h4>
                  </div>`;
         
-        // Tabela das Tarefas daquele projeto
         html += `<table style="margin-bottom: 0;">
                     <thead><tr>
                         <th style="width:40%">Tarefa</th>
                         <th style="width:20%">Prazo</th>
-                        <th style="width:20%">Responsável</th>
+                        <th style="width:20%">Responsáveis</th>
                         <th style="width:20%">Status</th>
                     </tr></thead>
                     <tbody>`;
         
         grouped[projName].forEach(t => {
             const sClass = `status-${t.status === 'concluido' ? 'concluido' : (t.status === 'aprovacao' ? 'andamento' : 'fazer')}`;
-            const respName = t.resps && t.resps[0] ? t.resps[0].nome.split(' ')[0] : '-';
+            // Múltiplos responsáveis agora aparecem na UI
+            const respNames = t.resps && t.resps.length > 0 ? t.resps.map(r => r.nome.split(' ')[0]).join(', ') : '-';
             html += `<tr onclick="abrirModal('${t.id}')" style="cursor:pointer">
                 <td class="bold">${t.text}</td>
                 <td>${t.data_fim ? t.data_fim.split('-').reverse().join('/') : 'N/D'}</td>
-                <td>${respName}</td>
+                <td style="font-size: 11px;">${respNames}</td>
                 <td><span class="status-pill ${sClass}">${t.status.toUpperCase()}</span></td>
             </tr>`;
         });
@@ -313,6 +318,12 @@ function abrirModal(id) {
     
     const isProjectGestor = currentUserRole === 'super-admin' || managedProjects.includes(t.project);
     
+    // Novos campos de edição de Área e Projeto
+    document.getElementById('editArea').value = t.area || "";
+    document.getElementById('editArea').disabled = !isProjectGestor;
+    document.getElementById('editProject').value = t.project || "";
+    document.getElementById('editProject').disabled = !isProjectGestor;
+
     document.getElementById('editTitle').value = t.text;
     document.getElementById('editTitle').disabled = !isProjectGestor;
     document.getElementById('editDateStart').value = t.data_inicio || "";
@@ -350,6 +361,8 @@ async function saveModalChanges() {
     };
     
     if(isProjectGestor) {
+        update.area = document.getElementById('editArea').value.trim();
+        update.project = document.getElementById('editProject').value.trim();
         update.text = document.getElementById('editTitle').value;
         update.data_inicio = document.getElementById('editDateStart').value;
         update.data_fim = document.getElementById('editDateEnd').value;
@@ -370,21 +383,16 @@ async function saveModalChanges() {
     try {
         await db.collection('tarefas').doc(currentTaskId).update(update);
 
-        // DISPARO DE E-MAIL (CC UNIVERSAL PARA SUPER-ADMIN)
         if (hasMeaningfulChange) {
             let recipientsEmails = (t.resps || []).map(r => r.email);
-            
-            // Força a entrada de todos os Super-Admins na lista de aviso
             const superAdmins = allUsers.filter(u => u.papel === 'super-admin').map(u => u.email);
             recipientsEmails = [...new Set([...recipientsEmails, ...superAdmins])];
-            
-            // Remove a pessoa que fez a alteração para não receber o próprio e-mail
             recipientsEmails = recipientsEmails.filter(email => email !== currentUserEmail);
 
             for (const emailTo of recipientsEmails) {
                 try {
                     await emailjs.send("service_yw91uty", "template_dexwd15", {
-                        projeto: t.project,
+                        projeto: update.project || t.project,
                         tarefa: update.text || t.text,
                         autor_atualizacao: currentUserEmail,
                         novo_status: update.status.toUpperCase(),
@@ -393,7 +401,7 @@ async function saveModalChanges() {
                         email_to: emailTo
                     });
                 } catch (error) {
-                    console.error(`Falha no envio de atualização para ${emailTo}:`, error);
+                    console.error(`Falha no envio para ${emailTo}:`, error);
                 }
             }
         }
@@ -409,26 +417,79 @@ async function saveModalChanges() {
 async function deleteTask() { if(confirm("Excluir definitivamente?")) { await db.collection('tarefas').doc(currentTaskId).delete(); closeModal(); } }
 
 // ==========================================================================
-// 7. BUSINESS INTELLIGENCE
+// 7. BUSINESS INTELLIGENCE (Filtro Cascata Área -> Projeto)
 // ==========================================================================
-function toggleFilterMenu() { document.getElementById('filter-checkboxes').classList.toggle('show'); }
-window.onclick = function(e) { if (!e.target.matches('.dropdown-btn') && !e.target.closest('.dropdown-content')) { document.querySelectorAll('.dropdown-content.show').forEach(el => el.classList.remove('show')); } }
+function toggleFilterMenu(type) { 
+    // Fecha outros abertos
+    document.querySelectorAll('.dropdown-content').forEach(el => {
+        if (el.id !== `filter-checkboxes-${type}`) el.classList.remove('show');
+    });
+    document.getElementById(`filter-checkboxes-${type}`).classList.toggle('show'); 
+}
+window.onclick = function(e) { 
+    if (!e.target.matches('.dropdown-btn') && !e.target.closest('.dropdown-content')) { 
+        document.querySelectorAll('.dropdown-content.show').forEach(el => el.classList.remove('show')); 
+    } 
+}
 
-function updateBIProjectFilter() {
-    const container = document.getElementById('filter-checkboxes');
+function updateBIAreaFilter() {
+    const container = document.getElementById('filter-checkboxes-area');
     if(!container) return;
     
-    const checkedBoxes = Array.from(document.querySelectorAll('.bi-proj-check:checked')).map(cb => cb.value);
+    const checkedBoxes = Array.from(document.querySelectorAll('.bi-area-check:checked')).map(cb => cb.value);
     
-    const allowedProjects = currentUserRole === 'super-admin' ? [...new Set(allTasks.map(t => t.project))] : managedProjects;
-    allowedProjects.sort();
+    // Pega todas as áreas únicas dos projetos permitidos
+    const allowedTasks = currentUserRole === 'super-admin' ? allTasks : allTasks.filter(t => managedProjects.includes(t.project));
+    const allAreas = [...new Set(allowedTasks.map(t => t.area || 'Sem Área'))].sort();
     
-    let html = `<label class="checkbox-item"><input type="checkbox" id="check-all-proj" onchange="toggleAllProjects(this)" ${checkedBoxes.length === 0 || checkedBoxes.includes('ALL') ? 'checked' : ''}><strong>[ TODOS PERMITIDOS ]</strong></label>`;
+    let html = `<label class="checkbox-item"><input type="checkbox" id="check-all-area" onchange="toggleAllAreas(this)" ${checkedBoxes.length === 0 || checkedBoxes.includes('ALL') ? 'checked' : ''}><strong>[ TODAS AS ÁREAS ]</strong></label>`;
+    allAreas.forEach(a => {
+        const isChecked = checkedBoxes.includes(a) || (checkedBoxes.length === 0 && document.getElementById('check-all-area')?.checked) ? 'checked' : '';
+        html += `<label class="checkbox-item"><input type="checkbox" class="bi-area-check" value="${a}" onchange="updateBIProjectFilter()" ${isChecked}>${a}</label>`;
+    });
+    container.innerHTML = html;
+    
+    updateBIProjectFilter(); // Inicia o cascata
+}
+
+function toggleAllAreas(masterCheckbox) {
+    document.querySelectorAll('.bi-area-check').forEach(cb => cb.checked = masterCheckbox.checked);
+    updateBIProjectFilter();
+}
+
+function updateBIProjectFilter() {
+    const container = document.getElementById('filter-checkboxes-proj');
+    if(!container) return;
+    
+    // Descobre quais áreas estão selecionadas
+    const masterAreaCheck = document.getElementById('check-all-area');
+    const selectedAreas = Array.from(document.querySelectorAll('.bi-area-check:checked')).map(cb => cb.value);
+    const btnAreaText = document.getElementById('btn-filter-area');
+    
+    let allowedTasks = currentUserRole === 'super-admin' ? allTasks : allTasks.filter(t => managedProjects.includes(t.project));
+    
+    if (masterAreaCheck && masterAreaCheck.checked) {
+        btnAreaText.innerText = "[ TODAS AS ÁREAS ] ▾";
+    } else if (selectedAreas.length > 0) {
+        btnAreaText.innerText = `${selectedAreas.length} ÁREA(S) ▾`;
+        allowedTasks = allowedTasks.filter(t => selectedAreas.includes(t.area || 'Sem Área'));
+    } else {
+        btnAreaText.innerText = "NENHUMA ÁREA ▾";
+        allowedTasks = [];
+    }
+
+    // Agora gera a lista de projetos baseada APENAS nas áreas permitidas e selecionadas
+    const previouslyCheckedProjs = Array.from(document.querySelectorAll('.bi-proj-check:checked')).map(cb => cb.value);
+    const allowedProjects = [...new Set(allowedTasks.map(t => t.project))].sort();
+    
+    let html = `<label class="checkbox-item"><input type="checkbox" id="check-all-proj" onchange="toggleAllProjects(this)" ${previouslyCheckedProjs.length === 0 || previouslyCheckedProjs.includes('ALL') ? 'checked' : ''}><strong>[ TODOS PERMITIDOS ]</strong></label>`;
     allowedProjects.forEach(p => {
-        const isChecked = checkedBoxes.includes(p) || (checkedBoxes.length === 0 && document.getElementById('check-all-proj')?.checked) ? 'checked' : '';
+        const isChecked = previouslyCheckedProjs.includes(p) || (previouslyCheckedProjs.length === 0 && document.getElementById('check-all-proj')?.checked) ? 'checked' : '';
         html += `<label class="checkbox-item"><input type="checkbox" class="bi-proj-check" value="${p}" onchange="renderNativeBI()" ${isChecked}>${p}</label>`;
     });
     container.innerHTML = html;
+    
+    renderNativeBI(); // Finalmente, renderiza o gráfico
 }
 
 function toggleAllProjects(masterCheckbox) {
@@ -439,9 +500,17 @@ function toggleAllProjects(masterCheckbox) {
 function renderNativeBI() {
     const masterCheck = document.getElementById('check-all-proj');
     const checkboxes = Array.from(document.querySelectorAll('.bi-proj-check:checked')).map(cb => cb.value);
-    const btnText = document.getElementById('btn-filter-toggle');
+    const btnText = document.getElementById('btn-filter-proj');
     
-    const baseTasks = currentUserRole === 'super-admin' ? allTasks : allTasks.filter(t => managedProjects.includes(t.project));
+    // A base de tarefas agora precisa respeitar ambos os filtros
+    const selectedAreas = Array.from(document.querySelectorAll('.bi-area-check:checked')).map(cb => cb.value);
+    const masterAreaCheck = document.getElementById('check-all-area');
+    
+    let baseTasks = currentUserRole === 'super-admin' ? allTasks : allTasks.filter(t => managedProjects.includes(t.project));
+    
+    if (!(masterAreaCheck && masterAreaCheck.checked)) {
+        baseTasks = baseTasks.filter(t => selectedAreas.includes(t.area || 'Sem Área'));
+    }
 
     if (masterCheck && masterCheck.checked) {
         btnText.innerText = "[ TODOS OS PROJETOS ] ▾";
@@ -487,7 +556,17 @@ function renderNativeBI() {
     });
 
     const teamLoad = {};
-    currentFilteredTasks.forEach(t => { const resp = t.resps && t.resps[0] ? t.resps[0].nome.split(' ')[0] : 'Sem Dono'; teamLoad[resp] = (teamLoad[resp] || 0) + 1; });
+    currentFilteredTasks.forEach(t => { 
+        // Conta a carga para todos os responsáveis envolvidos
+        if(t.resps && t.resps.length > 0) {
+            t.resps.forEach(r => {
+                const respName = r.nome.split(' ')[0];
+                teamLoad[respName] = (teamLoad[respName] || 0) + 1;
+            });
+        } else {
+            teamLoad['Sem Dono'] = (teamLoad['Sem Dono'] || 0) + 1;
+        }
+    });
     
     if(biChartTeam) biChartTeam.destroy();
     biChartTeam = new Chart(document.getElementById('biTeamChart'), { 
@@ -511,17 +590,29 @@ function drawExecutiveGantt(tasks) {
     minDate.setDate(minDate.getDate() - 1); maxDate.setDate(maxDate.getDate() + 1);
     const totalDuration = maxDate - minDate;
 
+    // Cálculo da Linha de Hoje
+    const today = new Date(); today.setHours(0,0,0,0);
+    const todayPerc = ((today - minDate) / totalDuration) * 100;
+    let todayMarker = '';
+    if (todayPerc >= 0 && todayPerc <= 100) {
+        todayMarker = `<div class="gantt-today-marker" style="left: ${todayPerc}%;" title="Linha do Tempo: Hoje"></div>`;
+    }
+
     let html = '';
     gTasks.forEach(t => {
         const start = new Date(t.data_inicio + 'T00:00:00');
         const end = new Date(t.data_fim + 'T00:00:00');
         const leftPerc = ((start - minDate) / totalDuration) * 100;
         const widthPerc = Math.max(((end - start) / totalDuration) * 100, 2);
-        const barClass = t.status === 'concluido' ? 'concluido' : (end < (new Date().setHours(0,0,0,0)) ? 'atrasado' : '');
-        const respName = t.resps && t.resps[0] ? t.resps[0].nome.split(' ')[0] : '-';
+        const barClass = t.status === 'concluido' ? 'concluido' : (end < today ? 'atrasado' : '');
+        const respNames = t.resps && t.resps.length > 0 ? t.resps.map(r => r.nome.split(' ')[0]).join(', ') : '-';
+        
+        const fStart = start.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year:'numeric'});
+        const fEnd = end.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year:'numeric'});
 
-        html += `<tr><td><strong style="font-size: 13px;">${t.text}</strong><br><small style="color:#64748b;">[${t.project}] • Resp: ${respName}</small></td>
-        <td><div class="gantt-track"><div class="gantt-bar-fill ${barClass}" style="left: ${leftPerc}%; width: ${widthPerc}%;"><span>📅 ${start.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})} até ${end.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})} • ${t.perc_desenvolvimento || 0}%</span></div></div></td></tr>`;
+        // Adicionado title na barra para o Tooltip nativo
+        html += `<tr><td><strong style="font-size: 13px;">${t.text}</strong><br><small style="color:#64748b;">[${t.project}] • Resp: ${respNames}</small></td>
+        <td><div class="gantt-track">${todayMarker}<div class="gantt-bar-fill ${barClass}" style="left: ${leftPerc}%; width: ${widthPerc}%;" title="Início: ${fStart}&#10;Término: ${fEnd}&#10;Status: ${t.status.toUpperCase()}"><span>📅 ${start.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})} até ${end.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})} • ${t.perc_desenvolvimento || 0}%</span></div></div></td></tr>`;
     });
     tbody.innerHTML = html;
 }
@@ -538,12 +629,12 @@ function openDrilldown(type) {
     else if (type === 'execucao') { title.innerText = "Demandas Em Execução"; targetTasks = currentFilteredTasks.filter(t => t.data_inicio && new Date(t.data_inicio + 'T00:00:00') <= today && t.status !== 'fazer'); }
     else if (type === 'atraso') { title.innerText = "Demandas com Prazo Vencido"; targetTasks = currentFilteredTasks.filter(t => t.data_fim && new Date(t.data_fim + 'T00:00:00') < today && t.status !== 'concluido'); }
 
-    if (targetTasks.length === 0) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Nenhuma tarefa encontrada.</td></tr>'; }
+    if (targetTasks.length === 0) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Nenhuma tarefa encontrada.</td></tr>'; }
     else {
         tbody.innerHTML = targetTasks.map(t => {
-            const resp = t.resps && t.resps[0] ? t.resps[0].nome : 'Sem Responsável';
+            const respNames = t.resps && t.resps.length > 0 ? t.resps.map(r => r.nome.split(' ')[0]).join(', ') : '-';
             const sClass = `status-${t.status === 'concluido' ? 'concluido' : (t.status === 'aprovacao' ? 'andamento' : 'fazer')}`;
-            return `<tr><td class="bold">${t.project}</td><td>${t.text}</td><td>${t.data_fim ? t.data_fim.split('-').reverse().join('/') : 'N/D'}</td><td>${resp}</td><td><span class="status-pill ${sClass}">${t.status.toUpperCase()}</span></td></tr>`;
+            return `<tr><td style="font-size:11px; color:#666;">${t.area || '-'}</td><td class="bold">${t.project}</td><td>${t.text}</td><td>${t.data_fim ? t.data_fim.split('-').reverse().join('/') : 'N/D'}</td><td>${respNames}</td><td><span class="status-pill ${sClass}">${t.status.toUpperCase()}</span></td></tr>`;
         }).join('');
     }
     modal.classList.add('active');
