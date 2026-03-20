@@ -83,7 +83,8 @@ function loadAreasEstrategicas() {
 
 function loadUsersDatabase() {
     db.collection('usuarios').onSnapshot(snapshot => {
-        allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Ordenação Alfabética Universal de Usuários
+        allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => a.nome.localeCompare(b.nome));
         populateUserSelectsMaster();
         renderUsers();
         if(document.getElementById('sec-admin').classList.contains('active')) renderAdminPanel();
@@ -117,12 +118,12 @@ function loadDataTasks() {
 function renderAdminPanel() {
     if(currentUserRole !== 'super-admin') return;
     
-    // FUSÃO: Áreas Oficiais + Áreas Fantasmas
     const formalAreas = allAreasData.map(a => a.id);
     const inferredAreas = [...new Set(allTasks.map(t => t.area).filter(a => a && a !== 'Sem Área'))];
-    const allCombinedAreas = [...new Set([...formalAreas, ...inferredAreas])].sort();
+    // Ordenação Alfabética Rigorosa
+    const allCombinedAreas = [...new Set([...formalAreas, ...inferredAreas])].sort((a, b) => a.localeCompare(b));
 
-    // 1. Datalist Híbrido de Áreas (Edição ou Criação)
+    // 1. Datalist Híbrido
     let areaOptions = '<option value="">Selecione a área para editar ou formalizar...</option>';
     areaOptions += '<option value="NOVA_AREA" style="font-weight:bold; color:#2563eb;">➕ CRIAR NOVA ÁREA ESTRATÉGICA</option>';
     allCombinedAreas.forEach(a => {
@@ -140,28 +141,43 @@ function renderAdminPanel() {
         </label>
     `).join('');
 
-    // 3. Lista de Áreas Ativas (Mostrando Fantasmas)
-    let htmlAreas = '<ul style="padding-left: 20px;">';
+    // 3. Lista de Áreas Ativas (Estética Executiva e Limpa)
+    let htmlAreas = '';
     allCombinedAreas.forEach(a => {
         const formalData = allAreasData.find(doc => doc.id === a);
         if (formalData) {
-            const gNomes = formalData.gestores ? formalData.gestores.map(email => {
+            const gNomes = formalData.gestores && formalData.gestores.length > 0 ? formalData.gestores.map(email => {
                 const u = allUsers.find(user => user.email === email);
                 return u ? u.nome.split(' ')[0] : email;
             }).join(', ') : 'Nenhum';
-            htmlAreas += `<li style="margin-bottom: 8px;"><strong>${a}</strong> <br><span style="color:#666">Gestores: ${gNomes}</span> <button onclick="deletarArea('${a}')" class="btn-text" style="color:red; font-size:10px;">[EXCLUIR]</button></li>`;
+            
+            htmlAreas += `
+            <div style="padding: 12px 15px; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; background: #fff;" onmouseover="this.style.borderColor='#cbd5e1'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.05)';" onmouseout="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none';">
+                <div>
+                    <strong style="font-size: 14px; color: #0f172a;">${a}</strong><br>
+                    <span style="color:#64748b; font-size:10px; font-weight:700; letter-spacing: 0.5px;">GESTORES: <span style="font-weight:500; color:#334155;">${gNomes.toUpperCase()}</span></span>
+                </div>
+                <button onclick="deletarArea('${a}')" style="background: #fff5f5; border: 1px solid #fc8181; color: #c53030; padding: 6px 12px; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='#fed7d7'" onmouseout="this.style.background='#fff5f5'">EXCLUIR</button>
+            </div>`;
         } else {
-            htmlAreas += `<li style="margin-bottom: 8px; color: #888;"><strong>${a}</strong> <br><span style="font-size:10px; color:#f59e0b; font-weight:bold;">[FANTASMA - Selecione e salve acima para oficializar]</span></li>`;
+            htmlAreas += `
+            <div style="padding: 12px 15px; border: 1px dashed #f59e0b; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; background: #fffbeb;">
+                <div>
+                    <strong style="font-size: 14px; color: #92400e;">${a}</strong><br>
+                    <span style="color:#d97706; font-size:10px; font-weight:bold;">[ FANTASMA - SELECIONE NO MENU ACIMA E SALVE ]</span>
+                </div>
+            </div>`;
         }
     });
-    document.getElementById('admin-areas-list').innerHTML = htmlAreas + '</ul>';
+    document.getElementById('admin-areas-list').innerHTML = htmlAreas;
 
     // 4. Lista Clicável de Projetos
     const projs = {};
     allTasks.forEach(t => { projs[t.project] = t.area || 'Sem Área'; });
     
     let htmlProjs = '';
-    Object.keys(projs).sort().forEach(p => {
+    // Ordenação Alfabética de Projetos
+    Object.keys(projs).sort((a, b) => a.localeCompare(b)).forEach(p => {
         htmlProjs += `
             <div onclick="prepararEdicaoProjeto('${p}', '${projs[p]}')" style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">
                 <strong style="font-size: 13px;">${p}</strong>
@@ -170,7 +186,7 @@ function renderAdminPanel() {
     });
     document.getElementById('admin-projects-list').innerHTML = htmlProjs;
 
-    // 5. Select de Novas Áreas para o Form de Refatoração
+    // 5. Select de Novas Áreas
     document.getElementById('adminProjectNewArea').innerHTML = '<option value="">Deixar Sem Área</option>' + allCombinedAreas.map(a => `<option value="${a}">${a}</option>`).join('');
 }
 
@@ -389,24 +405,24 @@ function getVisibleTasksBoard() {
 function updateProjectAndAreaLists() {
     const areaSelect = document.getElementById('areaInput');
     if(areaSelect) {
-        // FUSÃO: Para a criação de projeto, mostra áreas formais + fantasmas
         let allowedAreas = [];
         if (currentUserRole === 'super-admin') {
             const formal = allAreasData.map(a => a.id);
             const inferred = allTasks.map(t => t.area).filter(a => a && a !== 'Sem Área');
-            allowedAreas = [...new Set([...formal, ...inferred])].sort();
+            // Ordena Alfabeticamente
+            allowedAreas = [...new Set([...formal, ...inferred])].sort((a, b) => a.localeCompare(b));
         } else {
-            allowedAreas = managedAreas;
+            allowedAreas = managedAreas.sort((a, b) => a.localeCompare(b));
         }
         areaSelect.innerHTML = '<option value="">Selecione a Área...</option>' + allowedAreas.map(a => `<option value="${a}">${a}</option>`).join('');
     }
 
     const projList = document.getElementById('projectsList');
-    if(projList) projList.innerHTML = managedProjects.map(p => `<option value="${p}">`).join(''); 
+    if(projList) projList.innerHTML = managedProjects.sort((a, b) => a.localeCompare(b)).map(p => `<option value="${p}">`).join(''); 
     
     const filter = document.getElementById('filterProject');
     const tasks = getVisibleTasksBoard();
-    const projects = [...new Set(tasks.map(t => t.project))].sort();
+    const projects = [...new Set(tasks.map(t => t.project))].sort((a, b) => a.localeCompare(b));
     const curr = filter.value;
     filter.innerHTML = '<option value="geral">Todos os Projetos</option>' + projects.map(p => `<option value="${p}">${p}</option>`).join('');
     if(curr && projects.includes(curr)) filter.value = curr;
@@ -450,7 +466,7 @@ function renderBoard() {
     filtered.forEach(t => { if (!grouped[t.project]) grouped[t.project] = []; grouped[t.project].push(t); });
 
     let html = '';
-    Object.keys(grouped).sort().forEach(projName => {
+    Object.keys(grouped).sort((a, b) => a.localeCompare(b)).forEach(projName => {
         const projArea = grouped[projName][0].area || 'Sem Área';
         html += `<div style="background: #f8fafc; padding: 12px 20px; border-bottom: 1px solid var(--border-color); margin-top: 15px;">
                     <h4 style="margin: 0; font-size: 13px; text-transform: uppercase;">📁 ${projName} <span style="font-weight:400; color:#64748b; font-size:10px;">(${projArea})</span></h4>
@@ -581,7 +597,7 @@ function updateBIAreaFilter() {
     const checkedBoxes = Array.from(document.querySelectorAll('.bi-area-check:checked')).map(cb => cb.value);
     
     const allowedTasks = currentUserRole === 'super-admin' ? allTasks : allTasks.filter(t => managedAreas.includes(t.area) || managedProjects.includes(t.project));
-    const allAreas = [...new Set(allowedTasks.map(t => t.area || 'Sem Área'))].sort();
+    const allAreas = [...new Set(allowedTasks.map(t => t.area || 'Sem Área'))].sort((a, b) => a.localeCompare(b));
     
     let html = `<label class="checkbox-item"><input type="checkbox" id="check-all-area" onchange="toggleAllAreas(this)" ${checkedBoxes.length === 0 || checkedBoxes.includes('ALL') ? 'checked' : ''}><strong>[ TODAS AS ÁREAS ]</strong></label>`;
     allAreas.forEach(a => {
@@ -609,7 +625,7 @@ function updateBIProjectFilter() {
     else { btnAreaText.innerText = "NENHUMA ÁREA ▾"; allowedTasks = []; }
 
     const previouslyCheckedProjs = Array.from(document.querySelectorAll('.bi-proj-check:checked')).map(cb => cb.value);
-    const allowedProjects = [...new Set(allowedTasks.map(t => t.project))].sort();
+    const allowedProjects = [...new Set(allowedTasks.map(t => t.project))].sort((a, b) => a.localeCompare(b));
     
     let html = `<label class="checkbox-item"><input type="checkbox" id="check-all-proj" onchange="toggleAllProjects(this)" ${previouslyCheckedProjs.length === 0 || previouslyCheckedProjs.includes('ALL') ? 'checked' : ''}><strong>[ TODOS PERMITIDOS ]</strong></label>`;
     allowedProjects.forEach(p => {
@@ -670,7 +686,7 @@ function renderNativeBI() {
     });
     
     if(biChartTeam) biChartTeam.destroy();
-    biChartTeam = new Chart(document.getElementById('biTeamChart'), { type: 'bar', data: { labels: Object.keys(teamLoad), datasets: [{ label: 'Tarefas Atribuídas', data: Object.values(teamLoad), backgroundColor: '#0f172a', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false } });
+    biChartTeam = new Chart(document.getElementById('biTeamChart'), { type: 'bar', data: { labels: Object.keys(teamLoad).sort((a, b) => a.localeCompare(b)), datasets: [{ label: 'Tarefas Atribuídas', data: Object.values(teamLoad), backgroundColor: '#0f172a', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false } });
 
     drawExecutiveGantt(currentFilteredTasks);
 }
@@ -682,13 +698,25 @@ function drawExecutiveGantt(tasks) {
     const gTasks = tasks.filter(t => t.data_inicio && t.data_fim);
     if(gTasks.length === 0) { tbody.innerHTML = '<tr><td colspan="2" style="text-align:center; color:#888;">Nenhum cronograma definido.</td></tr>'; return; }
 
-    let minDate = new Date(Math.min(...gTasks.map(t => new Date(t.data_inicio + 'T00:00:00'))));
-    let maxDate = new Date(Math.max(...gTasks.map(t => new Date(t.data_fim + 'T00:00:00'))));
-    minDate.setDate(minDate.getDate() - 1); maxDate.setDate(maxDate.getDate() + 1);
-    const totalDuration = maxDate - minDate;
-
     const today = new Date(); today.setHours(0,0,0,0);
-    const todayPerc = ((today - minDate) / totalDuration) * 100;
+    const timeToday = today.getTime();
+    
+    const timesInicio = gTasks.map(t => new Date(t.data_inicio + 'T00:00:00').getTime());
+    const timesFim = gTasks.map(t => new Date(t.data_fim + 'T00:00:00').getTime());
+    
+    // A MATEMÁTICA QUE VOCÊ PEDIU: Força o 'Hoje' a ser considerado na extremidade do cálculo do gráfico
+    let minTime = Math.min(timeToday, ...timesInicio);
+    let maxTime = Math.max(timeToday, ...timesFim);
+
+    let minDate = new Date(minTime);
+    let maxDate = new Date(maxTime);
+    minDate.setDate(minDate.getDate() - 1); 
+    maxDate.setDate(maxDate.getDate() + 1);
+    
+    // Proteção contra divisão por zero
+    const totalDuration = Math.max(maxDate - minDate, 86400000); 
+
+    const todayPerc = ((timeToday - minDate) / totalDuration) * 100;
     let todayMarker = (todayPerc >= 0 && todayPerc <= 100) ? `<div class="gantt-today-marker" style="left: ${todayPerc}%;" title="Linha do Tempo: Hoje"></div>` : '';
 
     let html = '';
