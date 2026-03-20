@@ -79,13 +79,27 @@
                 </div>
 
                 <div class="stats-grid bi-kpis" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px;">
-                    <div class="stat-card shadow clickable" onclick="openDrilldown('total')"><h3 id="bi-kpi-total">0</h3><p>Demandas</p></div>
-                    <div class="stat-card shadow clickable" style="border-left: 4px solid #94a3b8;" onclick="openDrilldown('nao_iniciada')"><h3 id="bi-kpi-nao-iniciada">0</h3><p>Não Iniciadas</p></div>
-                    <div class="stat-card shadow clickable" style="border-left: 4px solid #f59e0b;" onclick="openDrilldown('atrasada')"><h3 id="bi-kpi-atrasada">0</h3><p>Atraso p/ Início</p></div>
-                    <div class="stat-card shadow clickable" style="border-left: 4px solid #3b82f6;" onclick="openDrilldown('execucao')"><h3 id="bi-kpi-execucao">0</h3><p>Em Execução</p></div>
-                    <div class="stat-card shadow clickable" style="border-left: 4px solid #10b981;" onclick="openDrilldown('aguardando')"><h3 id="bi-kpi-aguardando">0</h3><p>Aguardando OK</p></div>
-                    <div class="stat-card shadow clickable" style="border-left: 4px solid #dc3545;" onclick="openDrilldown('critica')"><h3 id="bi-kpi-critica">0</h3><p>Críticas (Vencidas)</p></div>
-                    <div class="stat-card shadow" style="border-left: 4px solid #8b5cf6; cursor: default;"><h3 id="bi-kpi-influencia">100%</h3><p>Influência</p></div>
+                    <div class="stat-card shadow clickable" title="Total de tarefas cadastradas nos projetos filtrados." onclick="openDrilldown('total')">
+                        <h3 id="bi-kpi-total">0</h3><p>Demandas</p>
+                    </div>
+                    <div class="stat-card shadow clickable" style="border-left: 4px solid #94a3b8;" title="No prazo, mas a equipe ainda não deu o play." onclick="openDrilldown('nao_iniciada')">
+                        <h3 id="bi-kpi-nao-iniciada">0</h3><p>Não Iniciadas</p>
+                    </div>
+                    <div class="stat-card shadow clickable" style="border-left: 4px solid #f59e0b;" title="A data de início passou e ninguém alterou o status para 'Em Execução'." onclick="openDrilldown('atrasada')">
+                        <h3 id="bi-kpi-atrasada">0</h3><p>Atraso p/ Início</p>
+                    </div>
+                    <div class="stat-card shadow clickable" style="border-left: 4px solid #3b82f6;" title="Tarefas ativas onde a equipe sinalizou que está trabalhando." onclick="openDrilldown('execucao')">
+                        <h3 id="bi-kpi-execucao">0</h3><p>Em Execução</p>
+                    </div>
+                    <div class="stat-card shadow clickable" style="border-left: 4px solid #10b981;" title="Executor finalizou. O Gestor precisa analisar e dar como Concluída." onclick="openDrilldown('aguardando')">
+                        <h3 id="bi-kpi-aguardando">0</h3><p>Aguardando OK</p>
+                    </div>
+                    <div class="stat-card shadow clickable" style="border-left: 4px solid #dc3545;" title="GARGALO: O prazo final estourou e a entrega não foi feita." onclick="openDrilldown('critica')">
+                        <h3 id="bi-kpi-critica">0</h3><p>Críticas (Vencidas)</p>
+                    </div>
+                    <div class="stat-card shadow" style="border-left: 4px solid #8b5cf6; cursor: help;" title="O peso que os colaboradores selecionados no gráfico carregam na operação.">
+                        <h3 id="bi-kpi-influencia">100%</h3><p>Influência</p>
+                    </div>
                 </div>
 
                 <div class="bi-charts-row">
@@ -252,14 +266,14 @@
             </div>
             <div class="form-grid">
                 <div class="form-group">
-                    <label>Status</label>
+                    <label>Status da Operação</label>
                     <select id="editStatus">
-                        <option value="fazer">A Fazer</option>
-                        <option value="andamento">Em Andamento</option>
-                        <option value="aprovacao">Aguardando OK Gestor</option>
-                        <option value="concluido" id="opt-concluido" style="display:none;">Concluído</option>
+                        <option value="fazer">Não Iniciada</option>
+                        <option value="andamento">Em Execução</option>
+                        <option value="aprovacao">Aguardando Validação</option>
+                        <option value="concluido" id="opt-concluido" style="display:none;">Concluída</option>
                     </select>
-                </div>        
+                </div> 
             </div>
             <div class="history-section">
                 <label>Linha do Tempo / Reports</label>
