@@ -7,7 +7,7 @@ let currentFilteredTasks = [];
 let currentTaskId = null;
 let currentUserEmail = null; 
 let currentUserRole = null; 
-let managedProjects = []; // Matriz de projetos que o usuário atual gerencia
+let managedProjects = []; 
 let biChartProgress = null;
 let biChartTeam = null;
 
@@ -31,12 +31,10 @@ function updateNavVisibility() {
     const isSuperAdmin = currentUserRole === 'super-admin';
     const isGestor = managedProjects.length > 0;
     
-    // Libera os botões com base no nível de acesso
     document.getElementById('btn-nav-bi').style.display = (isSuperAdmin || isGestor) ? 'inline-block' : 'none';
     document.getElementById('btn-nav-novo').style.display = (isSuperAdmin || isGestor) ? 'inline-block' : 'none';
     document.getElementById('btn-nav-usuarios').style.display = isSuperAdmin ? 'inline-block' : 'none';
     
-    // Roteamento forçado: se não tem poder (é só executor), vai direto para a visão operacional
     const currentActive = document.querySelector('.content-section.active')?.id;
     if (!isSuperAdmin && !isGestor && (currentActive === 'sec-dashboard-bi' || currentActive === 'sec-novo-projeto')) {
         showSection('acompanhamento');
@@ -53,14 +51,14 @@ auth.onAuthStateChanged(async user => {
         if (userQuery.empty) { alert("Acesso Negado. Você não está credenciado."); auth.signOut(); return; }
         
         const userData = userQuery.docs[0].data();
-        currentUserRole = userData.papel || 'membro'; // Fallback de segurança
+        currentUserRole = userData.papel || 'membro'; 
         
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('app-screen').style.display = 'block';
         document.getElementById('saudacao').innerText = `Olá, ${userData.nome.split(' ')[0]}`;
         
         loadUsersDatabase();
-        loadData(); // Inicia a carga de dados que define os poderes
+        loadData(); 
     } else {
         document.getElementById('login-screen').style.display = 'flex';
         document.getElementById('app-screen').style.display = 'none';
@@ -71,24 +69,21 @@ function logout() { auth.signOut(); }
 document.getElementById('login-btn').onclick = () => auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
 
 // ==========================================================================
-// 3. CARGA DE DADOS E DEFINIÇÃO DE PODERES
+// 3. CARGA DE DADOS
 // ==========================================================================
 function loadData() {
     db.collection('tarefas').orderBy('criadoEm', 'desc').onSnapshot(snapshot => {
         allTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
-        // MOTOR DE PERMISSÕES: Descobre os projetos que o usuário gerencia
         if (currentUserRole === 'super-admin') {
             managedProjects = [...new Set(allTasks.map(t => t.project))];
         } else {
-            // Vasculha as tarefas buscando onde o usuário está como 'gestor'
             managedProjects = [...new Set(allTasks.filter(t => t.resps && t.resps.some(r => r.email === currentUserEmail && r.papel === 'gestor')).map(t => t.project))];
         }
 
         updateNavVisibility();
         updateProjectList();
-        renderDashboard();
-        renderBoard();
+        renderDashboard(); // O renderDashboard agora aciona o renderBoard automaticamente
         updateBIProjectFilter(); 
         renderNativeBI();
     });
@@ -103,13 +98,12 @@ function loadUsersDatabase() {
 }
 
 // ==========================================================================
-// 4. GESTÃO DE EQUIPE GLOBAL
+// 4. GESTÃO DE EQUIPE
 // ==========================================================================
 async function cadastrarUsuario() {
     const nome = document.getElementById('novoUserNome').value.trim();
     const email = document.getElementById('novoUserEmail').value.toLowerCase().trim();
     if(nome && email) {
-        // Todo mundo entra apenas como membro. O papel de Gestor é dado no Projeto.
         await db.collection('usuarios').add({ nome, email, papel: 'membro' }); 
         document.getElementById('novoUserNome').value = '';
         document.getElementById('novoUserEmail').value = '';
@@ -133,7 +127,7 @@ function renderUsers() {
 async function removerUsuario(id) { if(confirm("Revogar acesso deste membro permanentemente?")) await db.collection('usuarios').doc(id).delete(); }
 
 // ==========================================================================
-// 5. INCLUSÃO DE DEMANDAS (Com E-mail e Papéis no Projeto)
+// 5. INCLUSÃO DE DEMANDAS
 // ==========================================================================
 function populateUserSelects() {
     const selects = document.querySelectorAll('.resp-select');
@@ -167,7 +161,6 @@ async function saveDemand() {
     const dateStart = document.getElementById('dateInputStart').value;
     const dateEnd = document.getElementById('dateInputEnd').value;
     
-    // TRAVA DE SEGURANÇA
     if (currentUserRole !== 'super-admin' && !managedProjects.includes(project)) {
         alert("Acesso Negado: Você só pode adicionar tarefas aos projetos em que é Gestor.");
         return;
@@ -196,7 +189,6 @@ async function saveDemand() {
             status: 'fazer', perc_desenvolvimento: 0, resps, criadoEm: new Date(), historico: [], email: resps[0].email
         });
 
-        // DISPARO DE E-MAIL (NOVA DEMANDA)
         for (const r of resps) {
             try {
                 await emailjs.send("service_yw91uty", "template_p5wyzq8", {
@@ -220,11 +212,10 @@ async function saveDemand() {
 }
 
 // ==========================================================================
-// 6. VISÃO OPERACIONAL E MODAIS (Com Notificação de Atualização e ESC Universal)
+// 6. VISÃO OPERACIONAL E MODAIS (Totalmente Refatorada)
 // ==========================================================================
 function getVisibleTasksBoard() {
     if (currentUserRole === 'super-admin') return allTasks;
-    // O usuário vê apenas os projetos que gerencia + as tarefas onde é executor
     return allTasks.filter(t => managedProjects.includes(t.project) || (t.resps && t.resps.some(r => r.email === currentUserEmail)));
 }
 
@@ -258,6 +249,9 @@ function renderDashboard() {
         <div class="stat-card shadow" style="border-left:4px solid #dc3545"><h3>${stats.atrasadas}</h3><p>Atrasadas</p></div>
         <div class="stat-card shadow" style="border-left:4px solid #000"><h3>${stats.pendentes}</h3><p>Em Aprovação</p></div>
         <div class="stat-card shadow" style="border-left:4px solid #28a745"><h3>${stats.concluidas}</h3><p>Concluídas</p></div>`;
+
+    // O filtro agora força a atualização da tabela abaixo também
+    renderBoard();
 }
 
 function renderBoard() {
@@ -266,12 +260,50 @@ function renderBoard() {
     const selected = document.getElementById('filterProject').value;
     const filtered = selected === 'geral' ? tasks : tasks.filter(t => t.project === selected);
     
-    let html = `<table><thead><tr><th>Projeto</th><th>Tarefa</th><th>Prazo</th><th>Status</th></tr></thead><tbody>`;
+    if (filtered.length === 0) {
+        board.innerHTML = '<p style="padding: 30px; text-align: center; color: #888; font-weight: bold;">Nenhuma demanda encontrada para este filtro.</p>';
+        return;
+    }
+
+    // Engenharia de Agrupamento por Projeto
+    const grouped = {};
     filtered.forEach(t => {
-        const sClass = `status-${t.status === 'concluido' ? 'concluido' : (t.status === 'aprovacao' ? 'andamento' : 'fazer')}`;
-        html += `<tr onclick="abrirModal('${t.id}')" style="cursor:pointer"><td class="bold">${t.project}</td><td>${t.text}</td><td>${t.data_fim ? t.data_fim.split('-').reverse().join('/') : 'N/D'}</td><td><span class="status-pill ${sClass}">${t.status.toUpperCase()}</span></td></tr>`;
+        if (!grouped[t.project]) grouped[t.project] = [];
+        grouped[t.project].push(t);
     });
-    board.innerHTML = html + `</tbody></table>`;
+
+    let html = '';
+    
+    Object.keys(grouped).sort().forEach(projName => {
+        // Cabeçalho do Projeto
+        html += `<div style="background: #f8fafc; padding: 12px 20px; border-bottom: 1px solid var(--border-color); margin-top: 15px;">
+                    <h4 style="margin: 0; font-size: 13px; text-transform: uppercase; color: #0f172a; letter-spacing: 0.5px;">📁 ${projName}</h4>
+                 </div>`;
+        
+        // Tabela das Tarefas daquele projeto
+        html += `<table style="margin-bottom: 0;">
+                    <thead><tr>
+                        <th style="width:40%">Tarefa</th>
+                        <th style="width:20%">Prazo</th>
+                        <th style="width:20%">Responsável</th>
+                        <th style="width:20%">Status</th>
+                    </tr></thead>
+                    <tbody>`;
+        
+        grouped[projName].forEach(t => {
+            const sClass = `status-${t.status === 'concluido' ? 'concluido' : (t.status === 'aprovacao' ? 'andamento' : 'fazer')}`;
+            const respName = t.resps && t.resps[0] ? t.resps[0].nome.split(' ')[0] : '-';
+            html += `<tr onclick="abrirModal('${t.id}')" style="cursor:pointer">
+                <td class="bold">${t.text}</td>
+                <td>${t.data_fim ? t.data_fim.split('-').reverse().join('/') : 'N/D'}</td>
+                <td>${respName}</td>
+                <td><span class="status-pill ${sClass}">${t.status.toUpperCase()}</span></td>
+            </tr>`;
+        });
+        html += `</tbody></table>`;
+    });
+
+    board.innerHTML = html;
 }
 
 function abrirModal(id) {
@@ -300,9 +332,6 @@ function abrirModal(id) {
 
 function closeModal() { document.getElementById('taskModal').classList.remove('active'); }
 
-// ==========================================
-// GATILHO UNIVERSAL 'ESC' (Operacional e BI)
-// ==========================================
 document.addEventListener('keydown', (e) => { 
     if(e.key === "Escape") {
         closeModal();
@@ -341,10 +370,18 @@ async function saveModalChanges() {
     try {
         await db.collection('tarefas').doc(currentTaskId).update(update);
 
-        // DISPARO DE E-MAIL (ATUALIZAÇÃO DE INTERAÇÃO)
+        // DISPARO DE E-MAIL (CC UNIVERSAL PARA SUPER-ADMIN)
         if (hasMeaningfulChange) {
-            const recipients = (t.resps || []).filter(r => r.email !== currentUserEmail);
-            for (const r of recipients) {
+            let recipientsEmails = (t.resps || []).map(r => r.email);
+            
+            // Força a entrada de todos os Super-Admins na lista de aviso
+            const superAdmins = allUsers.filter(u => u.papel === 'super-admin').map(u => u.email);
+            recipientsEmails = [...new Set([...recipientsEmails, ...superAdmins])];
+            
+            // Remove a pessoa que fez a alteração para não receber o próprio e-mail
+            recipientsEmails = recipientsEmails.filter(email => email !== currentUserEmail);
+
+            for (const emailTo of recipientsEmails) {
                 try {
                     await emailjs.send("service_yw91uty", "template_dexwd15", {
                         projeto: t.project,
@@ -353,10 +390,10 @@ async function saveModalChanges() {
                         novo_status: update.status.toUpperCase(),
                         progresso: update.perc_desenvolvimento,
                         reporte: report || systemMsg,
-                        email_to: r.email
+                        email_to: emailTo
                     });
                 } catch (error) {
-                    console.error(`Falha no envio de atualização para ${r.email}:`, error);
+                    console.error(`Falha no envio de atualização para ${emailTo}:`, error);
                 }
             }
         }
@@ -372,7 +409,7 @@ async function saveModalChanges() {
 async function deleteTask() { if(confirm("Excluir definitivamente?")) { await db.collection('tarefas').doc(currentTaskId).delete(); closeModal(); } }
 
 // ==========================================================================
-// 7. BUSINESS INTELLIGENCE (Nativo, Interativo e Blindado por RBAC)
+// 7. BUSINESS INTELLIGENCE
 // ==========================================================================
 function toggleFilterMenu() { document.getElementById('filter-checkboxes').classList.toggle('show'); }
 window.onclick = function(e) { if (!e.target.matches('.dropdown-btn') && !e.target.closest('.dropdown-content')) { document.querySelectorAll('.dropdown-content.show').forEach(el => el.classList.remove('show')); } }
@@ -383,7 +420,6 @@ function updateBIProjectFilter() {
     
     const checkedBoxes = Array.from(document.querySelectorAll('.bi-proj-check:checked')).map(cb => cb.value);
     
-    // BI SÓ EXIBE PROJETOS EM QUE O USUÁRIO É GESTOR (Ou todos, se super-admin)
     const allowedProjects = currentUserRole === 'super-admin' ? [...new Set(allTasks.map(t => t.project))] : managedProjects;
     allowedProjects.sort();
     
