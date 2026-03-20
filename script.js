@@ -117,13 +117,21 @@ function loadDataTasks() {
 function renderAdminPanel() {
     if(currentUserRole !== 'super-admin') return;
     
+    // FUSÃO: Áreas Oficiais + Áreas Fantasmas
+    const formalAreas = allAreasData.map(a => a.id);
+    const inferredAreas = [...new Set(allTasks.map(t => t.area).filter(a => a && a !== 'Sem Área'))];
+    const allCombinedAreas = [...new Set([...formalAreas, ...inferredAreas])].sort();
+
     // 1. Datalist Híbrido de Áreas (Edição ou Criação)
-    let areaOptions = '<option value="">Selecione a área para editar...</option>';
+    let areaOptions = '<option value="">Selecione a área para editar ou formalizar...</option>';
     areaOptions += '<option value="NOVA_AREA" style="font-weight:bold; color:#2563eb;">➕ CRIAR NOVA ÁREA ESTRATÉGICA</option>';
-    areaOptions += allAreasData.map(a => `<option value="${a.id}">${a.id}</option>`).join('');
+    allCombinedAreas.forEach(a => {
+        const isGhost = !formalAreas.includes(a) ? ' 👻 (FANTASMA - Formalize)' : '';
+        areaOptions += `<option value="${a}">${a}${isGhost}</option>`;
+    });
     document.getElementById('adminAreaSelect').innerHTML = areaOptions;
     
-    // 2. Checkboxes de Gestores (Estética Limpa)
+    // 2. Checkboxes de Gestores
     const container = document.getElementById('adminAreaGestoresContainer');
     container.innerHTML = allUsers.map(u => `
         <label class="admin-gestor-row" style="cursor: pointer;">
@@ -132,16 +140,19 @@ function renderAdminPanel() {
         </label>
     `).join('');
 
-    // 3. Lista de Áreas Ativas
+    // 3. Lista de Áreas Ativas (Mostrando Fantasmas)
     let htmlAreas = '<ul style="padding-left: 20px;">';
-    allAreasData.forEach(a => {
-        // Pega os nomes bonitos em vez dos emails se possível
-        const gNomes = a.gestores ? a.gestores.map(email => {
-            const u = allUsers.find(user => user.email === email);
-            return u ? u.nome.split(' ')[0] : email;
-        }).join(', ') : 'Nenhum';
-        
-        htmlAreas += `<li style="margin-bottom: 8px;"><strong>${a.id}</strong> <br><span style="color:#666">Gestores: ${gNomes}</span> <button onclick="deletarArea('${a.id}')" class="btn-text" style="color:red; font-size:10px;">[EXCLUIR]</button></li>`;
+    allCombinedAreas.forEach(a => {
+        const formalData = allAreasData.find(doc => doc.id === a);
+        if (formalData) {
+            const gNomes = formalData.gestores ? formalData.gestores.map(email => {
+                const u = allUsers.find(user => user.email === email);
+                return u ? u.nome.split(' ')[0] : email;
+            }).join(', ') : 'Nenhum';
+            htmlAreas += `<li style="margin-bottom: 8px;"><strong>${a}</strong> <br><span style="color:#666">Gestores: ${gNomes}</span> <button onclick="deletarArea('${a}')" class="btn-text" style="color:red; font-size:10px;">[EXCLUIR]</button></li>`;
+        } else {
+            htmlAreas += `<li style="margin-bottom: 8px; color: #888;"><strong>${a}</strong> <br><span style="font-size:10px; color:#f59e0b; font-weight:bold;">[FANTASMA - Selecione e salve acima para oficializar]</span></li>`;
+        }
     });
     document.getElementById('admin-areas-list').innerHTML = htmlAreas + '</ul>';
 
@@ -158,9 +169,11 @@ function renderAdminPanel() {
             </div>`;
     });
     document.getElementById('admin-projects-list').innerHTML = htmlProjs;
+
+    // 5. Select de Novas Áreas para o Form de Refatoração
+    document.getElementById('adminProjectNewArea').innerHTML = '<option value="">Deixar Sem Área</option>' + allCombinedAreas.map(a => `<option value="${a}">${a}</option>`).join('');
 }
 
-// Controle do campo Híbrido
 function tratarSelecaoAreaAdmin() {
     const select = document.getElementById('adminAreaSelect');
     const input = document.getElementById('adminAreaInput');
@@ -176,7 +189,6 @@ function tratarSelecaoAreaAdmin() {
     }
 }
 
-// Carrega os checkboxes baseados na área selecionada
 function carregarGestoresArea(areaId) {
     const areaExists = allAreasData.find(a => a.id === areaId);
     document.querySelectorAll('.admin-gestor-check').forEach(cb => {
@@ -200,7 +212,7 @@ async function salvarAreaEstrategica() {
     document.getElementById('adminAreaInput').style.display = 'none';
     document.getElementById('adminAreaInput').value = '';
     document.querySelectorAll('.admin-gestor-check').forEach(cb => cb.checked = false);
-    alert("Área configurada com sucesso!");
+    alert("Área configurada/oficializada com sucesso!");
     renderAdminPanel();
 }
 
@@ -215,10 +227,7 @@ function prepararEdicaoProjeto(projName, currArea) {
     document.getElementById('adminEditProjTarget').innerText = projName;
     document.getElementById('adminNewProjectName').value = projName;
     
-    // Bug corrigido: Força o re-desenho das opções aqui para garantir que estão atualizadas
-    document.getElementById('adminProjectNewArea').innerHTML = '<option value="">Deixar Sem Área</option>' + allAreasData.map(a => `<option value="${a.id}">${a.id}</option>`).join('');
     document.getElementById('adminProjectNewArea').value = currArea !== 'Sem Área' ? currArea : '';
-    
     document.getElementById('admin-edit-project-form').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
@@ -380,7 +389,15 @@ function getVisibleTasksBoard() {
 function updateProjectAndAreaLists() {
     const areaSelect = document.getElementById('areaInput');
     if(areaSelect) {
-        const allowedAreas = currentUserRole === 'super-admin' ? allAreasData.map(a=>a.id) : managedAreas;
+        // FUSÃO: Para a criação de projeto, mostra áreas formais + fantasmas
+        let allowedAreas = [];
+        if (currentUserRole === 'super-admin') {
+            const formal = allAreasData.map(a => a.id);
+            const inferred = allTasks.map(t => t.area).filter(a => a && a !== 'Sem Área');
+            allowedAreas = [...new Set([...formal, ...inferred])].sort();
+        } else {
+            allowedAreas = managedAreas;
+        }
         areaSelect.innerHTML = '<option value="">Selecione a Área...</option>' + allowedAreas.map(a => `<option value="${a}">${a}</option>`).join('');
     }
 
@@ -715,4 +732,4 @@ function openDrilldown(type) {
     modal.classList.add('active');
 }
 
-function closeDrilldown() { document.getElementById('drilldownModal').classList.remove('active'); }
+function closeDrilldown() { document.getElementById('drilldownModal').
