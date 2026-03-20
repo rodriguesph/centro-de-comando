@@ -78,23 +78,14 @@
                     </div>
                 </div>
 
-                <div class="stats-grid bi-kpis" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));">
-                    <div class="stat-card shadow clickable" onclick="openDrilldown('total')">
-                        <h3 id="bi-kpi-total">0</h3><p>Demandas</p>
-                    </div>
-                    <div class="stat-card shadow clickable" style="border-left: 4px solid #f59e0b;" onclick="openDrilldown('nao_iniciada')">
-                        <h3 id="bi-kpi-nao-iniciada">0</h3><p>Não Iniciadas</p>
-                    </div>
-                    <div class="stat-card shadow clickable" style="border-left: 4px solid #3b82f6;" onclick="openDrilldown('execucao')">
-                        <h3 id="bi-kpi-execucao">0</h3><p>Em Execução</p>
-                    </div>
-                    <div class="stat-card shadow clickable" style="border-left: 4px solid #dc3545;" onclick="openDrilldown('atraso')">
-                        <h3 id="bi-kpi-atraso">0</h3><p>Atrasadas</p>
-                    </div>
-                    <div class="stat-card shadow" style="border-left: 4px solid #8b5cf6; cursor: default;">
-                        <h3 id="bi-kpi-influencia">100%</h3><p>Influência</p>
-                        <small style="font-size: 9px; color: #a0aec0; font-weight: bold; text-transform: uppercase;">Peso do Colaborador</small>
-                    </div>
+                <div class="stats-grid bi-kpis" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px;">
+                    <div class="stat-card shadow clickable" onclick="openDrilldown('total')"><h3 id="bi-kpi-total">0</h3><p>Demandas</p></div>
+                    <div class="stat-card shadow clickable" style="border-left: 4px solid #94a3b8;" onclick="openDrilldown('nao_iniciada')"><h3 id="bi-kpi-nao-iniciada">0</h3><p>Não Iniciadas</p></div>
+                    <div class="stat-card shadow clickable" style="border-left: 4px solid #f59e0b;" onclick="openDrilldown('atrasada')"><h3 id="bi-kpi-atrasada">0</h3><p>Atraso p/ Início</p></div>
+                    <div class="stat-card shadow clickable" style="border-left: 4px solid #3b82f6;" onclick="openDrilldown('execucao')"><h3 id="bi-kpi-execucao">0</h3><p>Em Execução</p></div>
+                    <div class="stat-card shadow clickable" style="border-left: 4px solid #10b981;" onclick="openDrilldown('aguardando')"><h3 id="bi-kpi-aguardando">0</h3><p>Aguardando OK</p></div>
+                    <div class="stat-card shadow clickable" style="border-left: 4px solid #dc3545;" onclick="openDrilldown('critica')"><h3 id="bi-kpi-critica">0</h3><p>Críticas (Vencidas)</p></div>
+                    <div class="stat-card shadow" style="border-left: 4px solid #8b5cf6; cursor: default;"><h3 id="bi-kpi-influencia">100%</h3><p>Influência</p></div>
                 </div>
 
                 <div class="bi-charts-row">
@@ -133,7 +124,7 @@
                     <div class="form-group">
                         <label>Equipe e Papel nesta Demanda</label>
                         <div id="responsaveis-container"></div>
-                        <button onclick="addResponsavelField('responsaveis-container')" class="btn-text">+ Adicionar Envolvido</button>
+                        <button onclick="addResponsavelField('responsaveis-container')" class="btn-secondary" style="margin-top: 5px; padding: 5px 10px; font-size: 11px;">➕ Adicionar Outro Envolvido (Clonar Demanda)</button>
                     </div>
 
                     <div class="form-grid">
@@ -250,7 +241,7 @@
             <div class="form-group">
                 <label style="color: #000;">Equipe Alocada na Tarefa</label>
                 <div id="edit-responsaveis-container"></div>
-                <button onclick="addResponsavelField('edit-responsaveis-container')" class="btn-text" id="btn-add-edit-resp">+ Adicionar Envolvido</button>
+                <button onclick="addResponsavelField('responsaveis-container')" class="btn-secondary" style="margin-top: 5px; padding: 5px 10px; font-size: 11px;">➕ Adicionar Outro Envolvido (Clonar Demanda)</button>
             </div>
 
             <hr style="margin: 15px 0; border: 0; border-top: 1px solid #eee;">
@@ -268,8 +259,7 @@
                         <option value="aprovacao">Aguardando OK Gestor</option>
                         <option value="concluido" id="opt-concluido" style="display:none;">Concluído</option>
                     </select>
-                </div>
-                <div class="form-group"><label>Progresso (%)</label><input type="number" id="editPerc" min="0" max="100" step="5"></div>
+                </div>        
             </div>
             <div class="history-section">
                 <label>Linha do Tempo / Reports</label>

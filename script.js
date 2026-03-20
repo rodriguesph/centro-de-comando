@@ -12,7 +12,32 @@ let managedAreas = [];
 let managedProjects = []; 
 let biChartProgress = null;
 let biChartTeam = null;
-let biSelectedUsers = []; // NOVO: Guarda os usuários clicados no gráfico
+let biSelectedUsers = []; 
+
+// ==========================================================================
+// MOTOR LÓGICO DE STATUS EM TEMPO REAL
+// ==========================================================================
+function getCalculatedStatus(t) {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const start = t.data_inicio ? new Date(t.data_inicio + 'T00:00:00') : today;
+    const end = t.data_fim ? new Date(t.data_fim + 'T00:00:00') : today;
+
+    // 1. Status Definitivos (Ação manual do usuário)
+    if (t.status === 'concluido') return { id: 'concluida', label: 'CONCLUÍDA', class: 'status-concluida' };
+    if (t.status === 'aprovacao') return { id: 'aguardando', label: 'AGUARDANDO OK', class: 'status-aguardando' };
+    
+    // 2. Análise de Prazo Final (Se não concluiu nem mandou pra aprovação, e passou da data, é Crítico)
+    if (today > end) return { id: 'critica', label: 'CRÍTICA (VENCIDA)', class: 'status-critica' };
+    
+    // 3. Ação manual de Andamento
+    if (t.status === 'andamento') return { id: 'execucao', label: 'EM EXECUÇÃO', class: 'status-execucao' };
+    
+    // 4. Análise de Prazo Inicial (Ainda está como "Fazer", mas a data de início já chegou/passou)
+    if (today >= start) return { id: 'atrasada', label: 'ATRASADA P/ INICIAR', class: 'status-atrasada' };
+    
+    // 5. Default (Antes da data de início)
+    return { id: 'nao_iniciada', label: 'NÃO INICIADA', class: 'status-nao-iniciada' };
+}
 
 // ==========================================================================
 // 1. NAVEGAÇÃO SEGURA E CONTROLE DE ACESSO
@@ -49,7 +74,7 @@ function updateNavVisibility() {
 }
 
 // ==========================================================================
-// 2. AUTENTICAÇÃO E CARGA DE DADOS PARALELA
+// 2. AUTENTICAÇÃO E CARGA
 // ==========================================================================
 auth.onAuthStateChanged(async user => {
     if (user) {
@@ -113,7 +138,7 @@ function loadDataTasks() {
 }
 
 // ==========================================================================
-// 3. ADMINISTRAÇÃO AVANÇADA (ÁREAS E PROJETOS EM LOTE)
+// 3. ADMINISTRAÇÃO AVANÇADA
 // ==========================================================================
 function renderAdminPanel() {
     if(currentUserRole !== 'super-admin') return;
@@ -148,20 +173,17 @@ function renderAdminPanel() {
             }).join(', ') : 'Nenhum';
             
             htmlAreas += `
-            <div style="padding: 12px 15px; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; background: #fff;" onmouseover="this.style.borderColor='#cbd5e1'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.05)';" onmouseout="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none';">
+            <div style="padding: 12px 15px; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; background: #fff;">
                 <div>
                     <strong style="font-size: 14px; color: #0f172a;">${a}</strong><br>
-                    <span style="color:#64748b; font-size:10px; font-weight:700; letter-spacing: 0.5px;">GESTORES: <span style="font-weight:500; color:#334155;">${gNomes.toUpperCase()}</span></span>
+                    <span style="color:#64748b; font-size:10px; font-weight:700;">GESTORES: <span style="font-weight:500; color:#334155;">${gNomes.toUpperCase()}</span></span>
                 </div>
-                <button onclick="deletarArea('${a}')" style="background: #fff5f5; border: 1px solid #fc8181; color: #c53030; padding: 6px 12px; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='#fed7d7'" onmouseout="this.style.background='#fff5f5'">EXCLUIR</button>
+                <button onclick="deletarArea('${a}')" style="background: #fff5f5; border: 1px solid #fc8181; color: #c53030; padding: 6px 12px; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer;">EXCLUIR</button>
             </div>`;
         } else {
             htmlAreas += `
             <div style="padding: 12px 15px; border: 1px dashed #f59e0b; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; background: #fffbeb;">
-                <div>
-                    <strong style="font-size: 14px; color: #92400e;">${a}</strong><br>
-                    <span style="color:#d97706; font-size:10px; font-weight:bold;">[ FANTASMA - SELECIONE NO MENU ACIMA E SALVE ]</span>
-                </div>
+                <div><strong style="font-size: 14px; color: #92400e;">${a}</strong><br><span style="color:#d97706; font-size:10px; font-weight:bold;">[ FANTASMA ]</span></div>
             </div>`;
         }
     });
@@ -173,9 +195,8 @@ function renderAdminPanel() {
     let htmlProjs = '';
     Object.keys(projs).sort((a, b) => a.localeCompare(b)).forEach(p => {
         htmlProjs += `
-            <div onclick="prepararEdicaoProjeto('${p}', '${projs[p]}')" style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">
-                <strong style="font-size: 13px;">${p}</strong>
-                <span class="status-pill status-fazer" style="font-size: 9px;">${projs[p]}</span>
+            <div onclick="prepararEdicaoProjeto('${p}', '${projs[p]}')" style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <strong style="font-size: 13px;">${p}</strong><span class="status-pill status-fazer" style="font-size: 9px;">${projs[p]}</span>
             </div>`;
     });
     document.getElementById('admin-projects-list').innerHTML = htmlProjs;
@@ -185,33 +206,20 @@ function renderAdminPanel() {
 function tratarSelecaoAreaAdmin() {
     const select = document.getElementById('adminAreaSelect');
     const input = document.getElementById('adminAreaInput');
-    
-    if (select.value === 'NOVA_AREA') {
-        input.style.display = 'block';
-        input.focus();
-        document.querySelectorAll('.admin-gestor-check').forEach(cb => cb.checked = false);
-    } else {
-        input.style.display = 'none';
-        input.value = '';
-        carregarGestoresArea(select.value);
-    }
+    if (select.value === 'NOVA_AREA') { input.style.display = 'block'; input.focus(); document.querySelectorAll('.admin-gestor-check').forEach(cb => cb.checked = false); } 
+    else { input.style.display = 'none'; input.value = ''; carregarGestoresArea(select.value); }
 }
 
 function carregarGestoresArea(areaId) {
     const areaExists = allAreasData.find(a => a.id === areaId);
-    document.querySelectorAll('.admin-gestor-check').forEach(cb => {
-        cb.checked = (areaExists && areaExists.gestores && areaExists.gestores.includes(cb.value));
-    });
+    document.querySelectorAll('.admin-gestor-check').forEach(cb => { cb.checked = (areaExists && areaExists.gestores && areaExists.gestores.includes(cb.value)); });
 }
 
 async function salvarAreaEstrategica() {
     const selectVal = document.getElementById('adminAreaSelect').value;
     const inputVal = document.getElementById('adminAreaInput').value.trim();
-    
     let nomeArea = selectVal === 'NOVA_AREA' ? inputVal : selectVal;
-    
     if(!nomeArea) return alert("Você deve definir um nome para a área.");
-
     const gestoresSelecionados = Array.from(document.querySelectorAll('.admin-gestor-check:checked')).map(cb => cb.value);
     
     await db.collection('areas_estrategicas').doc(nomeArea).set({ gestores: gestoresSelecionados });
@@ -220,12 +228,11 @@ async function salvarAreaEstrategica() {
     document.getElementById('adminAreaInput').style.display = 'none';
     document.getElementById('adminAreaInput').value = '';
     document.querySelectorAll('.admin-gestor-check').forEach(cb => cb.checked = false);
-    alert("Área configurada/oficializada com sucesso!");
     renderAdminPanel();
 }
 
 async function deletarArea(idArea) {
-    if(!confirm(`Excluir a área ${idArea}? Os projetos vinculados a ela ficarão sem área definida.`)) return;
+    if(!confirm(`Excluir a área ${idArea}?`)) return;
     await db.collection('areas_estrategicas').doc(idArea).delete();
 }
 
@@ -233,44 +240,28 @@ function prepararEdicaoProjeto(projName, currArea) {
     document.getElementById('admin-edit-project-form').style.display = 'block';
     document.getElementById('adminEditProjTarget').innerText = projName;
     document.getElementById('adminNewProjectName').value = projName;
-    
     document.getElementById('adminProjectNewArea').value = currArea !== 'Sem Área' ? currArea : '';
     document.getElementById('admin-edit-project-form').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-function cancelarEdicaoProjetoAdmin() {
-    document.getElementById('admin-edit-project-form').style.display = 'none';
-}
+function cancelarEdicaoProjetoAdmin() { document.getElementById('admin-edit-project-form').style.display = 'none'; }
 
 async function refatorarProjetoCascata() {
     const oldName = document.getElementById('adminEditProjTarget').innerText;
     const newNameInput = document.getElementById('adminNewProjectName').value.trim();
     const newArea = document.getElementById('adminProjectNewArea').value;
-
     if(!oldName) return;
     const finalName = newNameInput || oldName;
 
-    if(!confirm(`ALERTA: Você vai reescrever TODAS as tarefas vinculadas ao projeto "${oldName}". Confirma?`)) return;
-
+    if(!confirm(`ALERTA: Você vai reescrever TODAS as tarefas de "${oldName}". Confirma?`)) return;
     const batch = db.batch();
     const snapshot = await db.collection('tarefas').where('project', '==', oldName).get();
-
-    if(snapshot.empty) return alert("Nenhuma tarefa encontrada neste projeto.");
-
+    if(snapshot.empty) return;
     snapshot.forEach(doc => {
         const updateData = { project: finalName, area: newArea || firebase.firestore.FieldValue.delete() };
         batch.update(doc.ref, updateData);
     });
-
-    try {
-        await batch.commit();
-        cancelarEdicaoProjetoAdmin();
-        alert(`Operação concluída. ${snapshot.size} tarefa(s) reescrita(s).`);
-        renderAdminPanel();
-    } catch (e) {
-        console.error("Erro fatal na escrita em lote:", e);
-        alert("Erro ao processar a cascata de dados.");
-    }
+    try { await batch.commit(); cancelarEdicaoProjetoAdmin(); alert("Operação concluída."); renderAdminPanel(); } catch (e) { alert("Erro ao processar lote."); }
 }
 
 // ==========================================================================
@@ -283,10 +274,8 @@ async function cadastrarUsuario() {
         await db.collection('usuarios').add({ nome, email, papel: 'membro' }); 
         document.getElementById('novoUserNome').value = '';
         document.getElementById('novoUserEmail').value = '';
-        alert("Membro credenciado!");
     }
 }
-
 function renderUsers() {
     const board = document.getElementById('lista-usuarios-board');
     if(!board) return;
@@ -297,10 +286,10 @@ function renderUsers() {
     });
     board.innerHTML = html + `</tbody></table></div>`;
 }
-async function removerUsuario(id) { if(confirm("Revogar acesso deste membro permanentemente?")) await db.collection('usuarios').doc(id).delete(); }
+async function removerUsuario(id) { if(confirm("Revogar acesso deste membro?")) await db.collection('usuarios').doc(id).delete(); }
 
 // ==========================================================================
-// 5. INCLUSÃO E EDIÇÃO DINÂMICA DE EQUIPES NAS TAREFAS
+// 5. INCLUSÃO (AGORA CRIA TAREFAS INDEPENDENTES CLONADAS)
 // ==========================================================================
 function populateUserSelectsMaster() {
     const optionsHTML = '<option value="">Selecione...</option>' + allUsers.map(u => `<option value="${u.email}">${u.nome}</option>`).join('');
@@ -315,7 +304,7 @@ function addResponsavelField(containerId, presetEmail = "", presetRole = "execut
     const container = document.getElementById(containerId);
     const div = document.createElement('div');
     div.className = 'resp-row';
-    div.style = "display: flex; gap: 10px; align-items: center;";
+    div.style = "display: flex; gap: 10px; align-items: center; margin-bottom: 5px;";
     
     const optionsHTML = '<option value="">Selecione o Membro...</option>' + allUsers.map(u => `<option value="${u.email}" ${u.email === presetEmail ? 'selected' : ''}>${u.nome}</option>`).join('');
     
@@ -354,8 +343,7 @@ async function saveDemand() {
     const dateEnd = document.getElementById('dateInputEnd').value;
     
     if (currentUserRole !== 'super-admin' && !managedAreas.includes(area) && !managedProjects.includes(project)) {
-        alert("Acesso Negado: Você não tem permissão de gestão nesta área/projeto.");
-        return;
+        return alert("Acesso Negado: Sem permissão nesta área/projeto.");
     }
 
     const resps = coletarEquipeDeContainer('responsaveis-container');
@@ -365,28 +353,35 @@ async function saveDemand() {
     }
     
     try {
-        await db.collection('tarefas').add({
-            area, project, text: title, descricao: desc,
-            data_inicio: dateStart, data_fim: dateEnd,
-            status: 'fazer', perc_desenvolvimento: 0, resps, criadoEm: new Date(), historico: [], email: resps[0].email
-        });
+        // MOTOR DE CLONAGEM: Cria uma tarefa separada para cada usuário da lista
+        const batch = db.batch();
+        for (const r of resps) {
+            const newDocRef = db.collection('tarefas').doc(); 
+            batch.set(newDocRef, {
+                area, project, text: title, descricao: desc,
+                data_inicio: dateStart, data_fim: dateEnd,
+                status: 'fazer', resps: [r], criadoEm: new Date(), historico: [], email: r.email
+            });
+        }
+        await batch.commit(); // Salva todas de uma vez
 
+        // Disparo de E-mails Individuais
         for (const r of resps) {
             try { await emailjs.send("service_yw91uty", "template_p5wyzq8", { responsavel: r.nome, projeto: project, email_to: r.email }); } 
             catch (error) { console.error("Falha no email:", error); }
         }
         
-        alert("Demanda lançada!");
+        alert(`${resps.length} demanda(s) independente(s) lançada(s)!`);
         document.getElementById('taskTitle').value = '';
         document.getElementById('taskDesc').value = '';
         document.getElementById('responsaveis-container').innerHTML = ''; 
         addResponsavelField('responsaveis-container'); 
         showSection('acompanhamento');
-    } catch (e) { alert("Erro ao lançar a demanda."); }
+    } catch (e) { alert("Erro ao lançar as demandas."); }
 }
 
 // ==========================================================================
-// 6. VISÃO OPERACIONAL E MODAL DE EDIÇÃO AVANÇADO
+// 6. VISÃO OPERACIONAL E MODAL DE EDIÇÃO
 // ==========================================================================
 function getVisibleTasksBoard() {
     if (currentUserRole === 'super-admin') return allTasks;
@@ -401,9 +396,7 @@ function updateProjectAndAreaLists() {
             const formal = allAreasData.map(a => a.id);
             const inferred = allTasks.map(t => t.area).filter(a => a && a !== 'Sem Área');
             allowedAreas = [...new Set([...formal, ...inferred])].sort((a, b) => a.localeCompare(b));
-        } else {
-            allowedAreas = managedAreas.sort((a, b) => a.localeCompare(b));
-        }
+        } else { allowedAreas = managedAreas.sort((a, b) => a.localeCompare(b)); }
         areaSelect.innerHTML = '<option value="">Selecione a Área...</option>' + allowedAreas.map(a => `<option value="${a}">${a}</option>`).join('');
     }
 
@@ -419,25 +412,6 @@ function updateProjectAndAreaLists() {
 }
 
 function renderDashboard() {
-    const tasks = getVisibleTasksBoard();
-    const selected = document.getElementById('filterProject').value;
-    const filtered = selected === 'geral' ? tasks : tasks.filter(t => t.project === selected);
-    
-    const stats = {
-        total: filtered.length,
-        atrasadas: filtered.filter(t => t.status !== 'concluido' && t.data_fim && new Date(t.data_fim) < new Date()).length,
-        pendentes: filtered.filter(t => t.status === 'aprovacao').length,
-        concluidas: filtered.filter(t => t.status === 'concluido').length
-    };
-    
-    document.getElementById('bi-kpi-total').innerText = stats.total;
-    
-    document.getElementById('stats-grid').innerHTML = `
-        <div class="stat-card shadow"><h3>${stats.total}</h3><p>Demandas</p></div>
-        <div class="stat-card shadow" style="border-left:4px solid #dc3545"><h3>${stats.atrasadas}</h3><p>Atrasadas</p></div>
-        <div class="stat-card shadow" style="border-left:4px solid #000"><h3>${stats.pendentes}</h3><p>Em Aprovação</p></div>
-        <div class="stat-card shadow" style="border-left:4px solid #28a745"><h3>${stats.concluidas}</h3><p>Concluídas</p></div>`;
-
     renderBoard();
 }
 
@@ -460,14 +434,14 @@ function renderBoard() {
         const projArea = grouped[projName][0].area || 'Sem Área';
         html += `<div style="background: #f8fafc; padding: 12px 20px; border-bottom: 1px solid var(--border-color); margin-top: 15px;">
                     <h4 style="margin: 0; font-size: 13px; text-transform: uppercase;">📁 ${projName} <span style="font-weight:400; color:#64748b; font-size:10px;">(${projArea})</span></h4>
-                 </div><table style="margin-bottom: 0;"><thead><tr><th style="width:40%">Tarefa</th><th style="width:20%">Prazo</th><th style="width:20%">Responsáveis</th><th style="width:20%">Status</th></tr></thead><tbody>`;
+                 </div><table style="margin-bottom: 0;"><thead><tr><th style="width:40%">Tarefa</th><th style="width:20%">Prazo</th><th style="width:20%">Responsável</th><th style="width:20%">Status</th></tr></thead><tbody>`;
         
         grouped[projName].forEach(t => {
-            const sClass = `status-${t.status === 'concluido' ? 'concluido' : (t.status === 'aprovacao' ? 'andamento' : 'fazer')}`;
+            const calcStatus = getCalculatedStatus(t);
             const respNames = t.resps && t.resps.length > 0 ? t.resps.map(r => r.nome.split(' ')[0]).join(', ') : '-';
             html += `<tr onclick="abrirModal('${t.id}')" style="cursor:pointer">
                 <td class="bold">${t.text}</td><td>${t.data_fim ? t.data_fim.split('-').reverse().join('/') : 'N/D'}</td>
-                <td style="font-size: 11px;">${respNames}</td><td><span class="status-pill ${sClass}">${t.status.toUpperCase()}</span></td></tr>`;
+                <td style="font-size: 11px;">${respNames}</td><td><span class="status-pill ${calcStatus.class}">${calcStatus.label}</span></td></tr>`;
         });
         html += `</tbody></table>`;
     });
@@ -491,14 +465,13 @@ function abrirModal(id) {
     document.getElementById('editDateEnd').value = t.data_fim || "";
     document.getElementById('editDateEnd').disabled = !isGestorPleno;
     document.getElementById('editDesc').value = t.descricao || "";
-    document.getElementById('editPerc').value = t.perc_desenvolvimento || 0;
+    
+    // Status Manual Controlado pela Lógica
     document.getElementById('editStatus').value = t.status;
     
     const containerResps = document.getElementById('edit-responsaveis-container');
     containerResps.innerHTML = ''; 
-    if(t.resps) {
-        t.resps.forEach(r => addResponsavelField('edit-responsaveis-container', r.email, r.papel));
-    }
+    if(t.resps) { t.resps.forEach(r => addResponsavelField('edit-responsaveis-container', r.email, r.papel)); }
     
     document.getElementById('btn-add-edit-resp').style.display = isGestorPleno ? 'inline-block' : 'none';
     document.querySelectorAll('#edit-responsaveis-container select').forEach(sel => sel.disabled = !isGestorPleno);
@@ -512,19 +485,22 @@ function abrirModal(id) {
 }
 
 function closeModal() { document.getElementById('taskModal').classList.remove('active'); }
+
+// FECHAMENTO UNIVERSAL AO CLICAR FORA (ESC + Click Outside)
 document.addEventListener('keydown', (e) => { 
     if(e.key === "Escape") { closeModal(); if (typeof closeDrilldown === "function") closeDrilldown(); } 
 });
+window.onclick = function(e) { 
+    if (!e.target.matches('.dropdown-btn') && !e.target.closest('.dropdown-content')) { document.querySelectorAll('.dropdown-content.show').forEach(el => el.classList.remove('show')); } 
+    if (e.target.classList.contains('modal')) { closeModal(); closeDrilldown(); }
+}
 
 async function saveModalChanges() {
     const t = allTasks.find(x => x.id === currentTaskId);
     const isGestorPleno = currentUserRole === 'super-admin' || managedAreas.includes(t.area) || managedProjects.includes(t.project);
     const report = document.getElementById('newReport').value.trim();
     
-    const update = { 
-        status: document.getElementById('editStatus').value, 
-        perc_desenvolvimento: parseInt(document.getElementById('editPerc').value) || 0 
-    };
+    const update = { status: document.getElementById('editStatus').value };
     
     if(isGestorPleno) {
         update.text = document.getElementById('editTitle').value;
@@ -533,14 +509,13 @@ async function saveModalChanges() {
         update.resps = coletarEquipeDeContainer('edit-responsaveis-container');
     }
     
-    let hasMeaningfulChange = false;
-    let systemMsg = "";
+    let hasMeaningfulChange = false; let systemMsg = "";
 
     if(report) {
         update.historico = firebase.firestore.FieldValue.arrayUnion({ data: new Date().toLocaleString('pt-BR'), autor: currentUserEmail, texto: report });
         hasMeaningfulChange = true;
-    } else if (update.status !== t.status || update.perc_desenvolvimento !== t.perc_desenvolvimento) {
-        systemMsg = `Atualizou: Status [${update.status.toUpperCase()}] - Progresso ${update.perc_desenvolvimento}%`;
+    } else if (update.status !== t.status) {
+        systemMsg = `Atualizou Status Manual para: [${update.status.toUpperCase()}]`;
         update.historico = firebase.firestore.FieldValue.arrayUnion({ data: new Date().toLocaleString('pt-BR'), autor: "SISTEMA", texto: systemMsg });
         hasMeaningfulChange = true;
     }
@@ -559,9 +534,9 @@ async function saveModalChanges() {
                     await emailjs.send("service_yw91uty", "template_dexwd15", {
                         projeto: t.project, tarefa: update.text || t.text,
                         autor_atualizacao: currentUserEmail, novo_status: update.status.toUpperCase(),
-                        progresso: update.perc_desenvolvimento, reporte: report || systemMsg, email_to: emailTo
+                        progresso: "Ver no Sistema", reporte: report || systemMsg, email_to: emailTo
                     });
-                } catch (error) { console.error("Falha no envio de e-mail:", error); }
+                } catch (error) { console.error("Falha no e-mail:", error); }
             }
         }
         document.getElementById('newReport').value = "";
@@ -572,23 +547,19 @@ async function saveModalChanges() {
 async function deleteTask() { if(confirm("Excluir definitivamente?")) { await db.collection('tarefas').doc(currentTaskId).delete(); closeModal(); } }
 
 // ==========================================================================
-// 7. BUSINESS INTELLIGENCE (COM CROSS-FILTERING)
+// 7. BUSINESS INTELLIGENCE
 // ==========================================================================
 function toggleFilterMenu(type) { 
     document.querySelectorAll('.dropdown-content').forEach(el => { if (el.id !== `filter-checkboxes-${type}`) el.classList.remove('show'); });
     document.getElementById(`filter-checkboxes-${type}`).classList.toggle('show'); 
 }
-window.onclick = function(e) { if (!e.target.matches('.dropdown-btn') && !e.target.closest('.dropdown-content')) { document.querySelectorAll('.dropdown-content.show').forEach(el => el.classList.remove('show')); } }
 
 function updateBIAreaFilter() {
     const container = document.getElementById('filter-checkboxes-area');
     if(!container) return;
-    
     const checkedBoxes = Array.from(document.querySelectorAll('.bi-area-check:checked')).map(cb => cb.value);
-    
     const allowedTasks = currentUserRole === 'super-admin' ? allTasks : allTasks.filter(t => managedAreas.includes(t.area) || managedProjects.includes(t.project));
     const allAreas = [...new Set(allowedTasks.map(t => t.area || 'Sem Área'))].sort((a, b) => a.localeCompare(b));
-    
     let html = `<label class="checkbox-item"><input type="checkbox" id="check-all-area" onchange="toggleAllAreas(this)" ${checkedBoxes.length === 0 || checkedBoxes.includes('ALL') ? 'checked' : ''}><strong>[ TODAS AS ÁREAS ]</strong></label>`;
     allAreas.forEach(a => {
         const isChecked = checkedBoxes.includes(a) || (checkedBoxes.length === 0 && document.getElementById('check-all-area')?.checked) ? 'checked' : '';
@@ -600,18 +571,16 @@ function updateBIAreaFilter() {
 
 function toggleAllAreas(masterCheckbox) { 
     document.querySelectorAll('.bi-area-check').forEach(cb => cb.checked = masterCheckbox.checked); 
-    biSelectedUsers = []; // Reseta cross-filter ao mudar o macro filtro
+    biSelectedUsers = []; 
     updateBIProjectFilter(); 
 }
 
 function updateBIProjectFilter() {
     const container = document.getElementById('filter-checkboxes-proj');
     if(!container) return;
-    
     const masterAreaCheck = document.getElementById('check-all-area');
     const selectedAreas = Array.from(document.querySelectorAll('.bi-area-check:checked')).map(cb => cb.value);
     const btnAreaText = document.getElementById('btn-filter-area');
-    
     let allowedTasks = currentUserRole === 'super-admin' ? allTasks : allTasks.filter(t => managedAreas.includes(t.area) || managedProjects.includes(t.project));
     
     if (masterAreaCheck && masterAreaCheck.checked) { btnAreaText.innerText = "[ TODAS AS ÁREAS ] ▾"; } 
@@ -620,47 +589,38 @@ function updateBIProjectFilter() {
 
     const previouslyCheckedProjs = Array.from(document.querySelectorAll('.bi-proj-check:checked')).map(cb => cb.value);
     const allowedProjects = [...new Set(allowedTasks.map(t => t.project))].sort((a, b) => a.localeCompare(b));
-    
     let html = `<label class="checkbox-item"><input type="checkbox" id="check-all-proj" onchange="toggleAllProjects(this)" ${previouslyCheckedProjs.length === 0 || previouslyCheckedProjs.includes('ALL') ? 'checked' : ''}><strong>[ TODOS PERMITIDOS ]</strong></label>`;
     allowedProjects.forEach(p => {
         const isChecked = previouslyCheckedProjs.includes(p) || (previouslyCheckedProjs.length === 0 && document.getElementById('check-all-proj')?.checked) ? 'checked' : '';
         html += `<label class="checkbox-item"><input type="checkbox" class="bi-proj-check" value="${p}" onchange="triggerRenderNativeBI()" ${isChecked}>${p}</label>`;
     });
     container.innerHTML = html;
-    
-    biSelectedUsers = []; // Reseta cross-filter
+    biSelectedUsers = []; 
     renderNativeBI(); 
 }
 
 function toggleAllProjects(masterCheckbox) { 
     document.querySelectorAll('.bi-proj-check').forEach(cb => cb.checked = masterCheckbox.checked); 
-    biSelectedUsers = []; // Reseta cross-filter
+    biSelectedUsers = []; 
     renderNativeBI(); 
 }
 
-function triggerRenderNativeBI() {
-    biSelectedUsers = []; // Limpa seleção de usuário ao trocar checkboxes manuais
-    renderNativeBI();
-}
+function triggerRenderNativeBI() { biSelectedUsers = []; renderNativeBI(); }
 
 function renderNativeBI() {
     const masterCheck = document.getElementById('check-all-proj');
     const checkboxes = Array.from(document.querySelectorAll('.bi-proj-check:checked')).map(cb => cb.value);
     const btnText = document.getElementById('btn-filter-proj');
-    
     const selectedAreas = Array.from(document.querySelectorAll('.bi-area-check:checked')).map(cb => cb.value);
     const masterAreaCheck = document.getElementById('check-all-area');
     
-    // 1. Cria a BASE DE TAREFAS (Macro Filtro: Área e Projeto)
     let baseTasks = currentUserRole === 'super-admin' ? allTasks : allTasks.filter(t => managedAreas.includes(t.area) || managedProjects.includes(t.project));
-    
     if (!(masterAreaCheck && masterAreaCheck.checked)) { baseTasks = baseTasks.filter(t => selectedAreas.includes(t.area || 'Sem Área')); }
 
     if (masterCheck && masterCheck.checked) { btnText.innerText = "[ TODOS OS PROJETOS ] ▾"; } 
     else if (checkboxes.length > 0) { btnText.innerText = `${checkboxes.length} PROJETO(S) ▾`; baseTasks = baseTasks.filter(t => checkboxes.includes(t.project)); } 
     else { btnText.innerText = "NENHUM PROJETO ▾"; baseTasks = []; }
 
-    // 2. Monta e renderiza o Gráfico de Barras com as baseTasks (Para não esconder quem não está selecionado)
     const teamLoad = {};
     baseTasks.forEach(t => { 
         if(t.resps && t.resps.length > 0) { t.resps.forEach(r => { const rn = r.nome.split(' ')[0]; teamLoad[rn] = (teamLoad[rn] || 0) + 1; }); } 
@@ -669,77 +629,64 @@ function renderNativeBI() {
     
     const barLabels = Object.keys(teamLoad).sort((a, b) => a.localeCompare(b));
     const barData = barLabels.map(l => teamLoad[l]);
-    
-    // Lógica de cores baseada em quem foi clicado
     const bgColors = barLabels.map(l => {
-        if (biSelectedUsers.length === 0) return '#0f172a'; // Ninguém selecionado: todos escuros
-        return biSelectedUsers.includes(l) ? '#0f172a' : '#cbd5e1'; // Selecionado: escuro, Não selecionado: cinza
+        if (biSelectedUsers.length === 0) return '#0f172a'; 
+        return biSelectedUsers.includes(l) ? '#0f172a' : '#cbd5e1';
     });
 
     if(biChartTeam) biChartTeam.destroy();
     biChartTeam = new Chart(document.getElementById('biTeamChart'), { 
-        type: 'bar', 
-        data: { labels: barLabels, datasets: [{ label: 'Tarefas Atribuídas', data: barData, backgroundColor: bgColors, borderRadius: 4 }] }, 
+        type: 'bar', data: { labels: barLabels, datasets: [{ label: 'Tarefas Atribuídas', data: barData, backgroundColor: bgColors, borderRadius: 4 }] }, 
         options: { 
             responsive: true, maintainAspectRatio: false,
             onClick: (e, elements) => {
                 if (elements.length > 0) {
                     const clickedUser = barLabels[elements[0].index];
-                    if (biSelectedUsers.includes(clickedUser)) {
-                        biSelectedUsers = biSelectedUsers.filter(u => u !== clickedUser); // Desmarca
-                    } else {
-                        biSelectedUsers.push(clickedUser); // Marca
-                    }
-                    renderNativeBI(); // Re-renderiza a tela inteira aplicando o filtro cruzado
+                    if (biSelectedUsers.includes(clickedUser)) { biSelectedUsers = biSelectedUsers.filter(u => u !== clickedUser); } 
+                    else { biSelectedUsers.push(clickedUser); }
+                    renderNativeBI(); 
                 }
             }
         } 
     });
 
-    // 3. Aplica o CROSS-FILTER: Tira da baseTasks apenas quem foi clicado no gráfico
     if (biSelectedUsers.length > 0) {
         currentFilteredTasks = baseTasks.filter(t => {
             if (biSelectedUsers.includes('Sem Dono') && (!t.resps || t.resps.length === 0)) return true;
             if (!t.resps) return false;
             return t.resps.some(r => biSelectedUsers.includes(r.nome.split(' ')[0]));
         });
-    } else {
-        currentFilteredTasks = baseTasks;
-    }
+    } else { currentFilteredTasks = baseTasks; }
 
-    // 4. Calcula KPIs com as tarefas filtradas pelo usuário (Micro Filtro)
-    const today = new Date(); today.setHours(0,0,0,0);
-    let kpis = { total: currentFilteredTasks.length, nao_iniciada: 0, execucao: 0, atraso: 0 };
+    // MATEMÁTICA LÓGICA DE KPIs (6 STATUS)
+    let kpis = { total: currentFilteredTasks.length, nao_iniciada: 0, atrasada: 0, execucao: 0, aguardando: 0, critica: 0, concluidas: 0 };
 
     currentFilteredTasks.forEach(t => {
-        const dInicio = t.data_inicio ? new Date(t.data_inicio + 'T00:00:00') : null;
-        const dFim = t.data_fim ? new Date(t.data_fim + 'T00:00:00') : null;
-        if (dInicio && dInicio < today && t.status === 'fazer') kpis.nao_iniciada++;
-        if (dInicio && dInicio <= today && t.status !== 'fazer') kpis.execucao++;
-        if (dFim && dFim < today && t.status !== 'concluido') kpis.atraso++;
+        const cStatus = getCalculatedStatus(t);
+        if (cStatus.id === 'nao_iniciada') kpis.nao_iniciada++;
+        if (cStatus.id === 'atrasada') kpis.atrasada++;
+        if (cStatus.id === 'execucao') kpis.execucao++;
+        if (cStatus.id === 'aguardando') kpis.aguardando++;
+        if (cStatus.id === 'critica') kpis.critica++;
+        if (cStatus.id === 'concluida') kpis.concluidas++;
     });
 
     document.getElementById('bi-kpi-total').innerText = kpis.total;
     document.getElementById('bi-kpi-nao-iniciada').innerText = kpis.nao_iniciada;
+    document.getElementById('bi-kpi-atrasada').innerText = kpis.atrasada;
     document.getElementById('bi-kpi-execucao').innerText = kpis.execucao;
-    document.getElementById('bi-kpi-atraso').innerText = kpis.atraso;
+    document.getElementById('bi-kpi-aguardando').innerText = kpis.aguardando;
+    document.getElementById('bi-kpi-critica').innerText = kpis.critica;
 
-    // 5. Calcula o KPI Novo: Influência
     let influencePerc = 100;
-    if (baseTasks.length > 0 && biSelectedUsers.length > 0) {
-        influencePerc = Math.round((currentFilteredTasks.length / baseTasks.length) * 100);
-    } else if (baseTasks.length === 0) {
-        influencePerc = 0;
-    }
+    if (baseTasks.length > 0 && biSelectedUsers.length > 0) { influencePerc = Math.round((currentFilteredTasks.length / baseTasks.length) * 100); } 
+    else if (baseTasks.length === 0) { influencePerc = 0; }
     document.getElementById('bi-kpi-influencia').innerText = influencePerc + '%';
 
-    // 6. Progress Chart e Gantt (Baseado nas tarefas micro-filtradas)
-    const concluidas = currentFilteredTasks.filter(t => t.status === 'concluido').length;
-    const pendentes = kpis.total - concluidas;
-    
+    const pendentes = kpis.total - kpis.concluidas;
     if(biChartProgress) biChartProgress.destroy();
     biChartProgress = new Chart(document.getElementById('biProgressChart'), { 
-        type: 'doughnut', data: { labels: ['Concluído', 'Pendente'], datasets: [{ data: [concluidas, pendentes], backgroundColor: ['#10b981', '#1e293b'] }] }, 
+        type: 'doughnut', data: { labels: ['Concluídas', 'Pendentes'], datasets: [{ data: [kpis.concluidas, pendentes], backgroundColor: ['#10b981', '#1e293b'] }] }, 
         options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { tooltip: { callbacks: { label: function(c) { let v=c.parsed, t=c.dataset.data.reduce((a,b)=>a+b,0), p=t>0?Math.round((v/t)*100):0; return ` ${c.label}: ${v} (${p}%)`; }}}}} 
     });
 
@@ -762,13 +709,10 @@ function drawExecutiveGantt(tasks) {
     let minTime = Math.min(timeToday, ...timesInicio);
     let maxTime = Math.max(timeToday, ...timesFim);
 
-    let minDate = new Date(minTime);
-    let maxDate = new Date(maxTime);
-    minDate.setDate(minDate.getDate() - 1); 
-    maxDate.setDate(maxDate.getDate() + 1);
+    let minDate = new Date(minTime); let maxDate = new Date(maxTime);
+    minDate.setDate(minDate.getDate() - 1); maxDate.setDate(maxDate.getDate() + 1);
     
     const totalDuration = Math.max(maxDate - minDate, 86400000); 
-
     const todayPerc = ((timeToday - minDate) / totalDuration) * 100;
     let todayMarker = (todayPerc >= 0 && todayPerc <= 100) ? `<div class="gantt-today-marker" style="left: ${todayPerc}%;" title="Linha do Tempo: Hoje"></div>` : '';
 
@@ -778,14 +722,14 @@ function drawExecutiveGantt(tasks) {
         const end = new Date(t.data_fim + 'T00:00:00');
         const leftPerc = ((start - minDate) / totalDuration) * 100;
         const widthPerc = Math.max(((end - start) / totalDuration) * 100, 2);
-        const barClass = t.status === 'concluido' ? 'concluido' : (end < today ? 'atrasado' : '');
-        const respNames = t.resps && t.resps.length > 0 ? t.resps.map(r => r.nome.split(' ')[0]).join(', ') : '-';
         
+        const cStatus = getCalculatedStatus(t);
+        const respNames = t.resps && t.resps.length > 0 ? t.resps.map(r => r.nome.split(' ')[0]).join(', ') : '-';
         const fStart = start.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year:'numeric'});
         const fEnd = end.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year:'numeric'});
 
         html += `<tr><td><strong style="font-size: 13px;">${t.text}</strong><br><small style="color:#64748b;">[${t.project}] • Resp: ${respNames}</small></td>
-        <td><div class="gantt-track">${todayMarker}<div class="gantt-bar-fill ${barClass}" style="left: ${leftPerc}%; width: ${widthPerc}%;" title="Início: ${fStart}&#10;Término: ${fEnd}&#10;Status: ${t.status.toUpperCase()}"><span>📅 ${start.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})} até ${end.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})} • ${t.perc_desenvolvimento || 0}%</span></div></div></td></tr>`;
+        <td><div class="gantt-track">${todayMarker}<div class="gantt-bar-fill ${cStatus.class}" style="left: ${leftPerc}%; width: ${widthPerc}%;" title="Início: ${fStart}&#10;Término: ${fEnd}&#10;Status: ${cStatus.label}"><span>📅 ${start.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})} até ${end.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})}</span></div></div></td></tr>`;
     });
     tbody.innerHTML = html;
 }
@@ -795,19 +739,27 @@ function openDrilldown(type) {
     const tbody = document.getElementById('drilldownBody');
     const title = document.getElementById('drilldownTitle');
     let targetTasks = [];
-    const today = new Date(); today.setHours(0,0,0,0);
 
     if (type === 'total') { title.innerText = "Detalhamento: Total de Demandas"; targetTasks = currentFilteredTasks; }
-    else if (type === 'nao_iniciada') { title.innerText = "Demandas Não Iniciadas (Atraso no Start)"; targetTasks = currentFilteredTasks.filter(t => t.data_inicio && new Date(t.data_inicio + 'T00:00:00') < today && t.status === 'fazer'); }
-    else if (type === 'execucao') { title.innerText = "Demandas Em Execução"; targetTasks = currentFilteredTasks.filter(t => t.data_inicio && new Date(t.data_inicio + 'T00:00:00') <= today && t.status !== 'fazer'); }
-    else if (type === 'atraso') { title.innerText = "Demandas com Prazo Vencido"; targetTasks = currentFilteredTasks.filter(t => t.data_fim && new Date(t.data_fim + 'T00:00:00') < today && t.status !== 'concluido'); }
+    else {
+        // Usa o motor lógico para o Drilldown bater com o KPI
+        const categoryMap = {
+            'nao_iniciada': 'Demandas Não Iniciadas',
+            'atrasada': 'Atrasadas para Iniciar',
+            'execucao': 'Demandas em Execução',
+            'aguardando': 'Aguardando Validação do Gestor',
+            'critica': 'Demandas Críticas (Prazo Vencido)'
+        };
+        title.innerText = `Detalhamento: ${categoryMap[type]}`;
+        targetTasks = currentFilteredTasks.filter(t => getCalculatedStatus(t).id === type);
+    }
 
     if (targetTasks.length === 0) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Nenhuma tarefa encontrada.</td></tr>'; }
     else {
         tbody.innerHTML = targetTasks.map(t => {
             const respNames = t.resps && t.resps.length > 0 ? t.resps.map(r => r.nome.split(' ')[0]).join(', ') : '-';
-            const sClass = `status-${t.status === 'concluido' ? 'concluido' : (t.status === 'aprovacao' ? 'andamento' : 'fazer')}`;
-            return `<tr><td style="font-size:11px; color:#666;">${t.area || '-'}</td><td class="bold">${t.project}</td><td>${t.text}</td><td>${t.data_fim ? t.data_fim.split('-').reverse().join('/') : 'N/D'}</td><td>${respNames}</td><td><span class="status-pill ${sClass}">${t.status.toUpperCase()}</span></td></tr>`;
+            const cStatus = getCalculatedStatus(t);
+            return `<tr><td style="font-size:11px; color:#666;">${t.area || '-'}</td><td class="bold">${t.project}</td><td>${t.text}</td><td>${t.data_fim ? t.data_fim.split('-').reverse().join('/') : 'N/D'}</td><td>${respNames}</td><td><span class="status-pill ${cStatus.class}">${cStatus.label}</span></td></tr>`;
         }).join('');
     }
     modal.classList.add('active');
