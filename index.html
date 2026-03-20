@@ -78,11 +78,23 @@
                     </div>
                 </div>
 
-                <div class="stats-grid bi-kpis">
-                    <div class="stat-card shadow clickable" onclick="openDrilldown('total')"><h3 id="bi-kpi-total">0</h3><p>Demandas</p></div>
-                    <div class="stat-card shadow clickable" style="border-left: 4px solid #f59e0b;" onclick="openDrilldown('nao_iniciada')"><h3 id="bi-kpi-nao-iniciada">0</h3><p>Não Iniciadas</p></div>
-                    <div class="stat-card shadow clickable" style="border-left: 4px solid #3b82f6;" onclick="openDrilldown('execucao')"><h3 id="bi-kpi-execucao">0</h3><p>Em Execução</p></div>
-                    <div class="stat-card shadow clickable" style="border-left: 4px solid #dc3545;" onclick="openDrilldown('atraso')"><h3 id="bi-kpi-atraso">0</h3><p>Atrasadas</p></div>
+                <div class="stats-grid bi-kpis" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));">
+                    <div class="stat-card shadow clickable" onclick="openDrilldown('total')">
+                        <h3 id="bi-kpi-total">0</h3><p>Demandas</p>
+                    </div>
+                    <div class="stat-card shadow clickable" style="border-left: 4px solid #f59e0b;" onclick="openDrilldown('nao_iniciada')">
+                        <h3 id="bi-kpi-nao-iniciada">0</h3><p>Não Iniciadas</p>
+                    </div>
+                    <div class="stat-card shadow clickable" style="border-left: 4px solid #3b82f6;" onclick="openDrilldown('execucao')">
+                        <h3 id="bi-kpi-execucao">0</h3><p>Em Execução</p>
+                    </div>
+                    <div class="stat-card shadow clickable" style="border-left: 4px solid #dc3545;" onclick="openDrilldown('atraso')">
+                        <h3 id="bi-kpi-atraso">0</h3><p>Atrasadas</p>
+                    </div>
+                    <div class="stat-card shadow" style="border-left: 4px solid #8b5cf6; cursor: default;">
+                        <h3 id="bi-kpi-influencia">100%</h3><p>Influência</p>
+                        <small style="font-size: 9px; color: #a0aec0; font-weight: bold; text-transform: uppercase;">Peso do Colaborador</small>
+                    </div>
                 </div>
 
                 <div class="bi-charts-row">

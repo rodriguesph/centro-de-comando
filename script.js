@@ -12,6 +12,7 @@ let managedAreas = [];
 let managedProjects = []; 
 let biChartProgress = null;
 let biChartTeam = null;
+let biSelectedUsers = []; // NOVO: Guarda os usuários clicados no gráfico
 
 // ==========================================================================
 // 1. NAVEGAÇÃO SEGURA E CONTROLE DE ACESSO
@@ -83,7 +84,6 @@ function loadAreasEstrategicas() {
 
 function loadUsersDatabase() {
     db.collection('usuarios').onSnapshot(snapshot => {
-        // Ordenação Alfabética Universal de Usuários
         allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => a.nome.localeCompare(b.nome));
         populateUserSelectsMaster();
         renderUsers();
@@ -120,10 +120,8 @@ function renderAdminPanel() {
     
     const formalAreas = allAreasData.map(a => a.id);
     const inferredAreas = [...new Set(allTasks.map(t => t.area).filter(a => a && a !== 'Sem Área'))];
-    // Ordenação Alfabética Rigorosa
     const allCombinedAreas = [...new Set([...formalAreas, ...inferredAreas])].sort((a, b) => a.localeCompare(b));
 
-    // 1. Datalist Híbrido
     let areaOptions = '<option value="">Selecione a área para editar ou formalizar...</option>';
     areaOptions += '<option value="NOVA_AREA" style="font-weight:bold; color:#2563eb;">➕ CRIAR NOVA ÁREA ESTRATÉGICA</option>';
     allCombinedAreas.forEach(a => {
@@ -132,7 +130,6 @@ function renderAdminPanel() {
     });
     document.getElementById('adminAreaSelect').innerHTML = areaOptions;
     
-    // 2. Checkboxes de Gestores
     const container = document.getElementById('adminAreaGestoresContainer');
     container.innerHTML = allUsers.map(u => `
         <label class="admin-gestor-row" style="cursor: pointer;">
@@ -141,7 +138,6 @@ function renderAdminPanel() {
         </label>
     `).join('');
 
-    // 3. Lista de Áreas Ativas (Estética Executiva e Limpa)
     let htmlAreas = '';
     allCombinedAreas.forEach(a => {
         const formalData = allAreasData.find(doc => doc.id === a);
@@ -171,12 +167,10 @@ function renderAdminPanel() {
     });
     document.getElementById('admin-areas-list').innerHTML = htmlAreas;
 
-    // 4. Lista Clicável de Projetos
     const projs = {};
     allTasks.forEach(t => { projs[t.project] = t.area || 'Sem Área'; });
     
     let htmlProjs = '';
-    // Ordenação Alfabética de Projetos
     Object.keys(projs).sort((a, b) => a.localeCompare(b)).forEach(p => {
         htmlProjs += `
             <div onclick="prepararEdicaoProjeto('${p}', '${projs[p]}')" style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">
@@ -185,8 +179,6 @@ function renderAdminPanel() {
             </div>`;
     });
     document.getElementById('admin-projects-list').innerHTML = htmlProjs;
-
-    // 5. Select de Novas Áreas
     document.getElementById('adminProjectNewArea').innerHTML = '<option value="">Deixar Sem Área</option>' + allCombinedAreas.map(a => `<option value="${a}">${a}</option>`).join('');
 }
 
@@ -237,7 +229,6 @@ async function deletarArea(idArea) {
     await db.collection('areas_estrategicas').doc(idArea).delete();
 }
 
-// A CASCATA DE DADOS
 function prepararEdicaoProjeto(projName, currArea) {
     document.getElementById('admin-edit-project-form').style.display = 'block';
     document.getElementById('adminEditProjTarget').innerText = projName;
@@ -409,7 +400,6 @@ function updateProjectAndAreaLists() {
         if (currentUserRole === 'super-admin') {
             const formal = allAreasData.map(a => a.id);
             const inferred = allTasks.map(t => t.area).filter(a => a && a !== 'Sem Área');
-            // Ordena Alfabeticamente
             allowedAreas = [...new Set([...formal, ...inferred])].sort((a, b) => a.localeCompare(b));
         } else {
             allowedAreas = managedAreas.sort((a, b) => a.localeCompare(b));
@@ -582,7 +572,7 @@ async function saveModalChanges() {
 async function deleteTask() { if(confirm("Excluir definitivamente?")) { await db.collection('tarefas').doc(currentTaskId).delete(); closeModal(); } }
 
 // ==========================================================================
-// 7. BUSINESS INTELLIGENCE
+// 7. BUSINESS INTELLIGENCE (COM CROSS-FILTERING)
 // ==========================================================================
 function toggleFilterMenu(type) { 
     document.querySelectorAll('.dropdown-content').forEach(el => { if (el.id !== `filter-checkboxes-${type}`) el.classList.remove('show'); });
@@ -608,7 +598,11 @@ function updateBIAreaFilter() {
     updateBIProjectFilter(); 
 }
 
-function toggleAllAreas(masterCheckbox) { document.querySelectorAll('.bi-area-check').forEach(cb => cb.checked = masterCheckbox.checked); updateBIProjectFilter(); }
+function toggleAllAreas(masterCheckbox) { 
+    document.querySelectorAll('.bi-area-check').forEach(cb => cb.checked = masterCheckbox.checked); 
+    biSelectedUsers = []; // Reseta cross-filter ao mudar o macro filtro
+    updateBIProjectFilter(); 
+}
 
 function updateBIProjectFilter() {
     const container = document.getElementById('filter-checkboxes-proj');
@@ -630,13 +624,24 @@ function updateBIProjectFilter() {
     let html = `<label class="checkbox-item"><input type="checkbox" id="check-all-proj" onchange="toggleAllProjects(this)" ${previouslyCheckedProjs.length === 0 || previouslyCheckedProjs.includes('ALL') ? 'checked' : ''}><strong>[ TODOS PERMITIDOS ]</strong></label>`;
     allowedProjects.forEach(p => {
         const isChecked = previouslyCheckedProjs.includes(p) || (previouslyCheckedProjs.length === 0 && document.getElementById('check-all-proj')?.checked) ? 'checked' : '';
-        html += `<label class="checkbox-item"><input type="checkbox" class="bi-proj-check" value="${p}" onchange="renderNativeBI()" ${isChecked}>${p}</label>`;
+        html += `<label class="checkbox-item"><input type="checkbox" class="bi-proj-check" value="${p}" onchange="triggerRenderNativeBI()" ${isChecked}>${p}</label>`;
     });
     container.innerHTML = html;
+    
+    biSelectedUsers = []; // Reseta cross-filter
     renderNativeBI(); 
 }
 
-function toggleAllProjects(masterCheckbox) { document.querySelectorAll('.bi-proj-check').forEach(cb => cb.checked = masterCheckbox.checked); renderNativeBI(); }
+function toggleAllProjects(masterCheckbox) { 
+    document.querySelectorAll('.bi-proj-check').forEach(cb => cb.checked = masterCheckbox.checked); 
+    biSelectedUsers = []; // Reseta cross-filter
+    renderNativeBI(); 
+}
+
+function triggerRenderNativeBI() {
+    biSelectedUsers = []; // Limpa seleção de usuário ao trocar checkboxes manuais
+    renderNativeBI();
+}
 
 function renderNativeBI() {
     const masterCheck = document.getElementById('check-all-proj');
@@ -646,14 +651,63 @@ function renderNativeBI() {
     const selectedAreas = Array.from(document.querySelectorAll('.bi-area-check:checked')).map(cb => cb.value);
     const masterAreaCheck = document.getElementById('check-all-area');
     
+    // 1. Cria a BASE DE TAREFAS (Macro Filtro: Área e Projeto)
     let baseTasks = currentUserRole === 'super-admin' ? allTasks : allTasks.filter(t => managedAreas.includes(t.area) || managedProjects.includes(t.project));
     
     if (!(masterAreaCheck && masterAreaCheck.checked)) { baseTasks = baseTasks.filter(t => selectedAreas.includes(t.area || 'Sem Área')); }
 
-    if (masterCheck && masterCheck.checked) { btnText.innerText = "[ TODOS OS PROJETOS ] ▾"; currentFilteredTasks = baseTasks; } 
-    else if (checkboxes.length > 0) { btnText.innerText = `${checkboxes.length} PROJETO(S) ▾`; currentFilteredTasks = baseTasks.filter(t => checkboxes.includes(t.project)); } 
-    else { btnText.innerText = "NENHUM PROJETO ▾"; currentFilteredTasks = []; }
+    if (masterCheck && masterCheck.checked) { btnText.innerText = "[ TODOS OS PROJETOS ] ▾"; } 
+    else if (checkboxes.length > 0) { btnText.innerText = `${checkboxes.length} PROJETO(S) ▾`; baseTasks = baseTasks.filter(t => checkboxes.includes(t.project)); } 
+    else { btnText.innerText = "NENHUM PROJETO ▾"; baseTasks = []; }
 
+    // 2. Monta e renderiza o Gráfico de Barras com as baseTasks (Para não esconder quem não está selecionado)
+    const teamLoad = {};
+    baseTasks.forEach(t => { 
+        if(t.resps && t.resps.length > 0) { t.resps.forEach(r => { const rn = r.nome.split(' ')[0]; teamLoad[rn] = (teamLoad[rn] || 0) + 1; }); } 
+        else { teamLoad['Sem Dono'] = (teamLoad['Sem Dono'] || 0) + 1; }
+    });
+    
+    const barLabels = Object.keys(teamLoad).sort((a, b) => a.localeCompare(b));
+    const barData = barLabels.map(l => teamLoad[l]);
+    
+    // Lógica de cores baseada em quem foi clicado
+    const bgColors = barLabels.map(l => {
+        if (biSelectedUsers.length === 0) return '#0f172a'; // Ninguém selecionado: todos escuros
+        return biSelectedUsers.includes(l) ? '#0f172a' : '#cbd5e1'; // Selecionado: escuro, Não selecionado: cinza
+    });
+
+    if(biChartTeam) biChartTeam.destroy();
+    biChartTeam = new Chart(document.getElementById('biTeamChart'), { 
+        type: 'bar', 
+        data: { labels: barLabels, datasets: [{ label: 'Tarefas Atribuídas', data: barData, backgroundColor: bgColors, borderRadius: 4 }] }, 
+        options: { 
+            responsive: true, maintainAspectRatio: false,
+            onClick: (e, elements) => {
+                if (elements.length > 0) {
+                    const clickedUser = barLabels[elements[0].index];
+                    if (biSelectedUsers.includes(clickedUser)) {
+                        biSelectedUsers = biSelectedUsers.filter(u => u !== clickedUser); // Desmarca
+                    } else {
+                        biSelectedUsers.push(clickedUser); // Marca
+                    }
+                    renderNativeBI(); // Re-renderiza a tela inteira aplicando o filtro cruzado
+                }
+            }
+        } 
+    });
+
+    // 3. Aplica o CROSS-FILTER: Tira da baseTasks apenas quem foi clicado no gráfico
+    if (biSelectedUsers.length > 0) {
+        currentFilteredTasks = baseTasks.filter(t => {
+            if (biSelectedUsers.includes('Sem Dono') && (!t.resps || t.resps.length === 0)) return true;
+            if (!t.resps) return false;
+            return t.resps.some(r => biSelectedUsers.includes(r.nome.split(' ')[0]));
+        });
+    } else {
+        currentFilteredTasks = baseTasks;
+    }
+
+    // 4. Calcula KPIs com as tarefas filtradas pelo usuário (Micro Filtro)
     const today = new Date(); today.setHours(0,0,0,0);
     let kpis = { total: currentFilteredTasks.length, nao_iniciada: 0, execucao: 0, atraso: 0 };
 
@@ -670,6 +724,16 @@ function renderNativeBI() {
     document.getElementById('bi-kpi-execucao').innerText = kpis.execucao;
     document.getElementById('bi-kpi-atraso').innerText = kpis.atraso;
 
+    // 5. Calcula o KPI Novo: Influência
+    let influencePerc = 100;
+    if (baseTasks.length > 0 && biSelectedUsers.length > 0) {
+        influencePerc = Math.round((currentFilteredTasks.length / baseTasks.length) * 100);
+    } else if (baseTasks.length === 0) {
+        influencePerc = 0;
+    }
+    document.getElementById('bi-kpi-influencia').innerText = influencePerc + '%';
+
+    // 6. Progress Chart e Gantt (Baseado nas tarefas micro-filtradas)
     const concluidas = currentFilteredTasks.filter(t => t.status === 'concluido').length;
     const pendentes = kpis.total - concluidas;
     
@@ -678,15 +742,6 @@ function renderNativeBI() {
         type: 'doughnut', data: { labels: ['Concluído', 'Pendente'], datasets: [{ data: [concluidas, pendentes], backgroundColor: ['#10b981', '#1e293b'] }] }, 
         options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { tooltip: { callbacks: { label: function(c) { let v=c.parsed, t=c.dataset.data.reduce((a,b)=>a+b,0), p=t>0?Math.round((v/t)*100):0; return ` ${c.label}: ${v} (${p}%)`; }}}}} 
     });
-
-    const teamLoad = {};
-    currentFilteredTasks.forEach(t => { 
-        if(t.resps && t.resps.length > 0) { t.resps.forEach(r => { const rn = r.nome.split(' ')[0]; teamLoad[rn] = (teamLoad[rn] || 0) + 1; }); } 
-        else { teamLoad['Sem Dono'] = (teamLoad['Sem Dono'] || 0) + 1; }
-    });
-    
-    if(biChartTeam) biChartTeam.destroy();
-    biChartTeam = new Chart(document.getElementById('biTeamChart'), { type: 'bar', data: { labels: Object.keys(teamLoad).sort((a, b) => a.localeCompare(b)), datasets: [{ label: 'Tarefas Atribuídas', data: Object.values(teamLoad), backgroundColor: '#0f172a', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false } });
 
     drawExecutiveGantt(currentFilteredTasks);
 }
@@ -704,7 +759,6 @@ function drawExecutiveGantt(tasks) {
     const timesInicio = gTasks.map(t => new Date(t.data_inicio + 'T00:00:00').getTime());
     const timesFim = gTasks.map(t => new Date(t.data_fim + 'T00:00:00').getTime());
     
-    // A MATEMÁTICA QUE VOCÊ PEDIU: Força o 'Hoje' a ser considerado na extremidade do cálculo do gráfico
     let minTime = Math.min(timeToday, ...timesInicio);
     let maxTime = Math.max(timeToday, ...timesFim);
 
@@ -713,7 +767,6 @@ function drawExecutiveGantt(tasks) {
     minDate.setDate(minDate.getDate() - 1); 
     maxDate.setDate(maxDate.getDate() + 1);
     
-    // Proteção contra divisão por zero
     const totalDuration = Math.max(maxDate - minDate, 86400000); 
 
     const todayPerc = ((timeToday - minDate) / totalDuration) * 100;
