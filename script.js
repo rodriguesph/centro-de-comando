@@ -117,24 +117,31 @@ function loadDataTasks() {
 function renderAdminPanel() {
     if(currentUserRole !== 'super-admin') return;
     
-    // 1. Datalist de Áreas
-    const datalist = document.getElementById('adminAreaList');
-    datalist.innerHTML = allAreasData.map(a => `<option value="${a.id}">`).join('');
+    // 1. Datalist Híbrido de Áreas (Edição ou Criação)
+    let areaOptions = '<option value="">Selecione a área para editar...</option>';
+    areaOptions += '<option value="NOVA_AREA" style="font-weight:bold; color:#2563eb;">➕ CRIAR NOVA ÁREA ESTRATÉGICA</option>';
+    areaOptions += allAreasData.map(a => `<option value="${a.id}">${a.id}</option>`).join('');
+    document.getElementById('adminAreaSelect').innerHTML = areaOptions;
     
-    // 2. Checkboxes de Gestores (Lista Mestra)
+    // 2. Checkboxes de Gestores (Estética Limpa)
     const container = document.getElementById('adminAreaGestoresContainer');
     container.innerHTML = allUsers.map(u => `
-        <label style="display: block; margin-bottom: 5px; font-size: 12px; cursor: pointer;">
-            <input type="checkbox" class="admin-gestor-check" value="${u.email}"> ${u.nome} <span style="color:#888; font-size:10px;">(${u.email})</span>
+        <label class="admin-gestor-row" style="cursor: pointer;">
+            <span class="bold">${u.nome}</span>
+            <input type="checkbox" class="admin-gestor-check" value="${u.email}">
         </label>
     `).join('');
-    carregarGestoresArea(); // Sincroniza se já houver texto no input
 
     // 3. Lista de Áreas Ativas
     let htmlAreas = '<ul style="padding-left: 20px;">';
     allAreasData.forEach(a => {
-        const gList = a.gestores ? a.gestores.join(', ') : 'Nenhum';
-        htmlAreas += `<li style="margin-bottom: 8px;"><strong>${a.id}</strong> <br><span style="color:#666">Gestores: ${gList}</span> <button onclick="deletarArea('${a.id}')" class="btn-text" style="color:red; font-size:10px;">[EXCLUIR]</button></li>`;
+        // Pega os nomes bonitos em vez dos emails se possível
+        const gNomes = a.gestores ? a.gestores.map(email => {
+            const u = allUsers.find(user => user.email === email);
+            return u ? u.nome.split(' ')[0] : email;
+        }).join(', ') : 'Nenhum';
+        
+        htmlAreas += `<li style="margin-bottom: 8px;"><strong>${a.id}</strong> <br><span style="color:#666">Gestores: ${gNomes}</span> <button onclick="deletarArea('${a.id}')" class="btn-text" style="color:red; font-size:10px;">[EXCLUIR]</button></li>`;
     });
     document.getElementById('admin-areas-list').innerHTML = htmlAreas + '</ul>';
 
@@ -151,45 +158,67 @@ function renderAdminPanel() {
             </div>`;
     });
     document.getElementById('admin-projects-list').innerHTML = htmlProjs;
-    
-    // 5. Select de Novas Áreas para o Form de Refatoração
-    document.getElementById('adminProjectNewArea').innerHTML = '<option value="">Manter Área Atual</option>' + allAreasData.map(a => `<option value="${a.id}">${a.id}</option>`).join('');
 }
 
-function carregarGestoresArea() {
-    const inputVal = document.getElementById('adminAreaName').value.trim();
-    const areaExists = allAreasData.find(a => a.id === inputVal);
+// Controle do campo Híbrido
+function tratarSelecaoAreaAdmin() {
+    const select = document.getElementById('adminAreaSelect');
+    const input = document.getElementById('adminAreaInput');
     
-    const checkboxes = document.querySelectorAll('.admin-gestor-check');
-    checkboxes.forEach(cb => {
+    if (select.value === 'NOVA_AREA') {
+        input.style.display = 'block';
+        input.focus();
+        document.querySelectorAll('.admin-gestor-check').forEach(cb => cb.checked = false);
+    } else {
+        input.style.display = 'none';
+        input.value = '';
+        carregarGestoresArea(select.value);
+    }
+}
+
+// Carrega os checkboxes baseados na área selecionada
+function carregarGestoresArea(areaId) {
+    const areaExists = allAreasData.find(a => a.id === areaId);
+    document.querySelectorAll('.admin-gestor-check').forEach(cb => {
         cb.checked = (areaExists && areaExists.gestores && areaExists.gestores.includes(cb.value));
     });
 }
 
 async function salvarAreaEstrategica() {
-    const nomeArea = document.getElementById('adminAreaName').value.trim();
-    const gestoresSelecionados = Array.from(document.querySelectorAll('.admin-gestor-check:checked')).map(cb => cb.value);
+    const selectVal = document.getElementById('adminAreaSelect').value;
+    const inputVal = document.getElementById('adminAreaInput').value.trim();
+    
+    let nomeArea = selectVal === 'NOVA_AREA' ? inputVal : selectVal;
+    
+    if(!nomeArea) return alert("Você deve definir um nome para a área.");
 
-    if(!nomeArea) return alert("O nome da área é obrigatório.");
+    const gestoresSelecionados = Array.from(document.querySelectorAll('.admin-gestor-check:checked')).map(cb => cb.value);
     
     await db.collection('areas_estrategicas').doc(nomeArea).set({ gestores: gestoresSelecionados });
     
-    document.getElementById('adminAreaName').value = '';
+    document.getElementById('adminAreaSelect').value = '';
+    document.getElementById('adminAreaInput').style.display = 'none';
+    document.getElementById('adminAreaInput').value = '';
+    document.querySelectorAll('.admin-gestor-check').forEach(cb => cb.checked = false);
     alert("Área configurada com sucesso!");
     renderAdminPanel();
 }
 
 async function deletarArea(idArea) {
-    if(!confirm(`Excluir a área ${idArea}? Os projetos dela ficarão órfãos.`)) return;
+    if(!confirm(`Excluir a área ${idArea}? Os projetos vinculados a ela ficarão sem área definida.`)) return;
     await db.collection('areas_estrategicas').doc(idArea).delete();
 }
 
+// A CASCATA DE DADOS
 function prepararEdicaoProjeto(projName, currArea) {
     document.getElementById('admin-edit-project-form').style.display = 'block';
     document.getElementById('adminEditProjTarget').innerText = projName;
     document.getElementById('adminNewProjectName').value = projName;
-    document.getElementById('adminProjectNewArea').value = currArea;
-    // Scroll suave para o form
+    
+    // Bug corrigido: Força o re-desenho das opções aqui para garantir que estão atualizadas
+    document.getElementById('adminProjectNewArea').innerHTML = '<option value="">Deixar Sem Área</option>' + allAreasData.map(a => `<option value="${a.id}">${a.id}</option>`).join('');
+    document.getElementById('adminProjectNewArea').value = currArea !== 'Sem Área' ? currArea : '';
+    
     document.getElementById('admin-edit-project-form').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
@@ -205,7 +234,7 @@ async function refatorarProjetoCascata() {
     if(!oldName) return;
     const finalName = newNameInput || oldName;
 
-    if(!confirm(`ALERTA: Você vai atualizar TODAS as tarefas de "${oldName}". Confirma?`)) return;
+    if(!confirm(`ALERTA: Você vai reescrever TODAS as tarefas vinculadas ao projeto "${oldName}". Confirma?`)) return;
 
     const batch = db.batch();
     const snapshot = await db.collection('tarefas').where('project', '==', oldName).get();
@@ -213,19 +242,18 @@ async function refatorarProjetoCascata() {
     if(snapshot.empty) return alert("Nenhuma tarefa encontrada neste projeto.");
 
     snapshot.forEach(doc => {
-        const updateData = { project: finalName };
-        if(newArea) updateData.area = newArea;
+        const updateData = { project: finalName, area: newArea || firebase.firestore.FieldValue.delete() };
         batch.update(doc.ref, updateData);
     });
 
     try {
         await batch.commit();
         cancelarEdicaoProjetoAdmin();
-        alert(`Sucesso! ${snapshot.size} tarefa(s) foram reescritas e realocadas.`);
+        alert(`Operação concluída. ${snapshot.size} tarefa(s) reescrita(s).`);
         renderAdminPanel();
     } catch (e) {
-        console.error("Erro no Batch Write:", e);
-        alert("Erro fatal ao processar a cascata de dados.");
+        console.error("Erro fatal na escrita em lote:", e);
+        alert("Erro ao processar a cascata de dados.");
     }
 }
 

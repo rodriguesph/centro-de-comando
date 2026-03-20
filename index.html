@@ -160,26 +160,29 @@
                     
                     <div class="form-container shadow">
                         <h3>Gestão de Áreas Estratégicas</h3>
+                        
                         <div class="form-group">
-                            <label>Nome da Área (Selecione para editar ou digite para criar)</label>
-                            <input type="text" id="adminAreaName" list="adminAreaList" placeholder="Ex: Docência" oninput="carregarGestoresArea()">
-                            <datalist id="adminAreaList"></datalist>
+                            <label>Selecione uma área para editar ou crie uma nova</label>
+                            <select id="adminAreaSelect" class="input-padrao" onchange="tratarSelecaoAreaAdmin()">
+                                </select>
+                            <input type="text" id="adminAreaInput" placeholder="Digite o nome da nova área..." style="display: none; margin-top: 10px;">
                         </div>
+
                         <div class="form-group">
-                            <label>Gestores desta Área</label>
-                            <div id="adminAreaGestoresContainer" class="checkbox-list-container" style="max-height: 150px; overflow-y: auto; border: 1px solid #e2e8f0; padding: 10px; border-radius: 4px; background: #f8fafc;">
+                            <label>Gestores desta Área (Marque para dar poder, desmarque para tirar)</label>
+                            <div id="adminAreaGestoresContainer" style="max-height: 180px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 4px; background: #f8fafc;">
                                 </div>
                         </div>
-                        <button onclick="salvarAreaEstrategica()" class="btn-primary" style="width: 100%;">SALVAR ÁREA</button>
+                        <button onclick="salvarAreaEstrategica()" class="btn-primary" style="width: 100%;">SALVAR CONFIGURAÇÃO DA ÁREA</button>
                         
                         <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
-                        <h4>Áreas Ativas</h4>
+                        <h4>Áreas Ativas no Sistema</h4>
                         <div id="admin-areas-list" style="font-size: 11px; max-height: 200px; overflow-y: auto;"></div>
                     </div>
                     
                     <div class="form-container shadow" style="border-top: 4px solid #dc3545;">
                         <h3 style="color: #dc3545; margin-top: 0;">Gestão de Projetos (Em Lote)</h3>
-                        <p style="font-size: 11px; color: #666; margin-bottom: 10px;">Selecione um projeto para renomeá-lo ou movê-lo de área. Todas as tarefas serão atualizadas instantaneamente.</p>
+                        <p style="font-size: 11px; color: #666; margin-bottom: 10px;">Clique em um projeto para renomeá-lo ou movê-lo de área. A alteração reescreve todas as tarefas vinculadas.</p>
                         
                         <div id="admin-projects-list" style="max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 4px; margin-bottom: 15px;">
                             </div>

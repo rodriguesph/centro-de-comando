@@ -133,3 +133,27 @@ input, select, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; bo
 .btn-remove-resp {
     background: none; border: none; color: #dc3545; font-size: 16px; cursor: pointer; padding: 0 5px; font-weight: bold;
 }
+
+/* ==========================================================================
+   LISTA DE GESTORES ADMIN
+   ========================================================================== */
+.admin-gestor-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 12px;
+    transition: background 0.2s;
+}
+.admin-gestor-row:hover {
+    background: #f1f5f9;
+}
+.admin-gestor-row:last-child {
+    border-bottom: none;
+}
+.admin-gestor-row input[type="checkbox"] {
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+}
