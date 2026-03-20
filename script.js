@@ -416,22 +416,20 @@ function renderDashboard() {
     const selected = document.getElementById('filterProject').value;
     const filtered = selected === 'geral' ? tasks : tasks.filter(t => t.project === selected);
     
-    const todayZero = new Date(); today.setHours(0,0,0,0);
+    const todayZero = new Date(); 
+    todayZero.setHours(0,0,0,0); // Correção: a variável certa sendo zerada
 
     const stats = {
         total: filtered.length,
-        // Críticas: Não concluídas e data fim estourada
         criticas: filtered.filter(t => t.status !== 'concluido' && t.data_fim && new Date(t.data_fim + 'T00:00:00') < todayZero).length,
         pendentes: filtered.filter(t => t.status === 'aprovacao').length,
         concluidas: filtered.filter(t => t.status === 'concluido').length
     };
     
-    document.getElementById('bi-kpi-total').innerText = stats.total;
-    
     document.getElementById('stats-grid').innerHTML = `
         <div class="stat-card shadow"><h3>${stats.total}</h3><p>Demandas</p></div>
         <div class="stat-card shadow" style="border-left:4px solid #dc3545"><h3>${stats.criticas}</h3><p>Críticas (Vencidas)</p></div>
-        <div class="stat-card shadow" style="border-left:4px solid #f59e0b"><h3>${stats.pendentes}</h3><p>Aguardando OK</p></div>
+        <div class="stat-card shadow" style="border-left:4px solid #f59e0b"><h3>${stats.pendentes}</h3><p>Aguardando Validação</p></div>
         <div class="stat-card shadow" style="border-left:4px solid #10b981"><h3>${stats.concluidas}</h3><p>Concluídas</p></div>`;
 
     renderBoard();
