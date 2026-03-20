@@ -119,3 +119,17 @@ input, select, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; bo
 .gantt-bar-fill {
     cursor: help; /* Muda o cursor para indicar que há informação no hover */
 }
+
+/* ==========================================================================
+   AJUSTES PARA O PAINEL ADMIN E MODAL DINÂMICO
+   ========================================================================== */
+#edit-responsaveis-container .resp-row {
+    background: #f8fafc;
+    padding: 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    margin-bottom: 5px;
+}
+.btn-remove-resp {
+    background: none; border: none; color: #dc3545; font-size: 16px; cursor: pointer; padding: 0 5px; font-weight: bold;
+}

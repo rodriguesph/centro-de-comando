@@ -50,6 +50,7 @@
                 <button onclick="showSection('dashboard-bi')" id="btn-nav-bi" class="nav-link active">LIVE BI</button>
                 <button onclick="showSection('acompanhamento')" id="btn-nav-op" class="nav-link">OPERACIONAL</button>
                 <button onclick="showSection('usuarios')" id="btn-nav-usuarios" class="nav-link" style="display:none;">EQUIPE</button>
+                <button onclick="showSection('admin')" id="btn-nav-admin" class="nav-link" style="display:none; color: #dc3545;">ADMINISTRAÇÃO</button>
                 <button onclick="showSection('novo-projeto')" id="btn-nav-novo" class="btn-primary" style="display:none; margin-left: auto;">NOVO PROJETO</button>
             </div>
         </nav>
@@ -59,74 +60,42 @@
             <section id="sec-dashboard-bi" class="content-section active">
                 <div class="section-header" style="flex-wrap: wrap; gap: 15px;">
                     <h2>Business Intelligence</h2>
-                    
                     <div class="bi-filters-row" style="display: flex; gap: 15px; margin-left: auto;">
                         <div class="custom-filter-container">
                             <label>Áreas Estratégicas:</label>
                             <div class="dropdown-wrapper">
                                 <button id="btn-filter-area" class="dropdown-btn shadow" onclick="toggleFilterMenu('area')">[ TODAS AS ÁREAS ] ▾</button>
-                                <div id="filter-checkboxes-area" class="dropdown-content shadow">
-                                    </div>
+                                <div id="filter-checkboxes-area" class="dropdown-content shadow"></div>
                             </div>
                         </div>
-
                         <div class="custom-filter-container">
                             <label>Projetos em Análise:</label>
                             <div class="dropdown-wrapper">
                                 <button id="btn-filter-proj" class="dropdown-btn shadow" onclick="toggleFilterMenu('proj')">[ TODOS OS PROJETOS ] ▾</button>
-                                <div id="filter-checkboxes-proj" class="dropdown-content shadow">
-                                    </div>
+                                <div id="filter-checkboxes-proj" class="dropdown-content shadow"></div>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="stats-grid bi-kpis">
-                    <div class="stat-card shadow clickable" onclick="openDrilldown('total')">
-                        <h3 id="bi-kpi-total">0</h3>
-                        <p>Total de Demandas</p>
-                        <small class="click-hint">Clique para detalhar ↗</small>
-                    </div>
-                    <div class="stat-card shadow clickable" style="border-left: 4px solid #f59e0b;" onclick="openDrilldown('nao_iniciada')">
-                        <h3 id="bi-kpi-nao-iniciada">0</h3>
-                        <p>Não Iniciadas</p>
-                        <small class="click-hint">Clique para detalhar ↗</small>
-                    </div>
-                    <div class="stat-card shadow clickable" style="border-left: 4px solid #3b82f6;" onclick="openDrilldown('execucao')">
-                        <h3 id="bi-kpi-execucao">0</h3>
-                        <p>Em Execução</p>
-                        <small class="click-hint">Clique para detalhar ↗</small>
-                    </div>
-                    <div class="stat-card shadow clickable" style="border-left: 4px solid #dc3545;" onclick="openDrilldown('atraso')">
-                        <h3 id="bi-kpi-atraso">0</h3>
-                        <p>Atrasadas</p>
-                        <small class="click-hint">Clique para detalhar ↗</small>
-                    </div>
+                    <div class="stat-card shadow clickable" onclick="openDrilldown('total')"><h3 id="bi-kpi-total">0</h3><p>Demandas</p></div>
+                    <div class="stat-card shadow clickable" style="border-left: 4px solid #f59e0b;" onclick="openDrilldown('nao_iniciada')"><h3 id="bi-kpi-nao-iniciada">0</h3><p>Não Iniciadas</p></div>
+                    <div class="stat-card shadow clickable" style="border-left: 4px solid #3b82f6;" onclick="openDrilldown('execucao')"><h3 id="bi-kpi-execucao">0</h3><p>Em Execução</p></div>
+                    <div class="stat-card shadow clickable" style="border-left: 4px solid #dc3545;" onclick="openDrilldown('atraso')"><h3 id="bi-kpi-atraso">0</h3><p>Atrasadas</p></div>
                 </div>
 
                 <div class="bi-charts-row">
-                    <div class="bi-chart-card shadow">
-                        <h4>Progresso Geral</h4>
-                        <div class="canvas-container"><canvas id="biProgressChart"></canvas></div>
-                    </div>
-                    <div class="bi-chart-card shadow">
-                        <h4>Volume por Responsável</h4>
-                        <div class="canvas-container"><canvas id="biTeamChart"></canvas></div>
-                    </div>
+                    <div class="bi-chart-card shadow"><h4>Progresso Geral</h4><div class="canvas-container"><canvas id="biProgressChart"></canvas></div></div>
+                    <div class="bi-chart-card shadow"><h4>Volume por Responsável</h4><div class="canvas-container"><canvas id="biTeamChart"></canvas></div></div>
                 </div>
 
                 <div class="bi-gantt-card shadow">
                     <h4>Cronograma Mestre de Execução</h4>
                     <div class="table-container">
                         <table class="gantt-table">
-                            <thead>
-                                <tr>
-                                    <th style="width: 30%;">Demanda / Projeto</th>
-                                    <th style="width: 70%;">Linha do Tempo (Início ➝ Fim)</th>
-                                </tr>
-                            </thead>
-                            <tbody id="bi-gantt-body">
-                                </tbody>
+                            <thead><tr><th style="width: 30%;">Demanda / Projeto</th><th style="width: 70%;">Linha do Tempo</th></tr></thead>
+                            <tbody id="bi-gantt-body"></tbody>
                         </table>
                     </div>
                 </div>
@@ -138,8 +107,7 @@
                     <div class="form-grid">
                         <div class="form-group">
                             <label>Área Estratégica</label>
-                            <input type="text" id="areaInput" list="areaList" placeholder="Ex: Coordenação">
-                            <datalist id="areaList"></datalist>
+                            <select id="areaInput"><option value="">Carregando...</option></select>
                         </div>
                         <div class="form-group">
                             <label>Projeto</label>
@@ -147,27 +115,13 @@
                             <datalist id="projectsList"></datalist>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label>Título da Tarefa</label>
-                        <input type="text" id="taskTitle">
-                    </div>
-                    <div class="form-group">
-                        <label>Escopo Detalhado</label>
-                        <textarea id="taskDesc" rows="3"></textarea>
-                    </div>
+                    <div class="form-group"><label>Título da Tarefa</label><input type="text" id="taskTitle"></div>
+                    <div class="form-group"><label>Escopo Detalhado</label><textarea id="taskDesc" rows="3"></textarea></div>
                     
                     <div class="form-group">
                         <label>Equipe e Papel nesta Demanda</label>
-                        <div id="responsaveis-container">
-                            <div class="resp-row" style="display: flex; gap: 10px; margin-bottom: 10px;">
-                                <select class="resp-select" style="flex: 2;"><option value="">Carregando...</option></select>
-                                <select class="resp-role" style="flex: 1;">
-                                    <option value="executor">Executor</option>
-                                    <option value="gestor">Gestor do Projeto</option>
-                                </select>
-                            </div>
-                        </div>
-                        <button onclick="addResponsavelField()" class="btn-text">+ Adicionar Envolvido</button>
+                        <div id="responsaveis-container"></div>
+                        <button onclick="addResponsavelField('responsaveis-container')" class="btn-text">+ Adicionar Envolvido</button>
                     </div>
 
                     <div class="form-grid">
@@ -199,55 +153,70 @@
                 <h3 style="margin-top: 40px;">Membros Ativos</h3>
                 <div id="lista-usuarios-board"></div>
             </section>
+
+            <section id="sec-admin" class="content-section">
+                <div class="section-header"><h2>Controle Arquitetural</h2></div>
+                <div class="form-grid">
+                    <div class="form-container shadow">
+                        <h3>Gestão de Áreas Estratégicas</h3>
+                        <div class="form-group"><label>Nome da Área</label><input type="text" id="adminAreaName" placeholder="Ex: Docência"></div>
+                        <div class="form-group">
+                            <label>Gestores desta Área (Segure Ctrl para vários)</label>
+                            <select id="adminAreaGestores" multiple style="height: 100px;"></select>
+                        </div>
+                        <button onclick="salvarAreaEstrategica()" class="btn-primary" style="width: 100%;">SALVAR ÁREA</button>
+                        <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+                        <h4>Áreas Ativas</h4>
+                        <div id="admin-areas-list" style="font-size: 11px; max-height: 200px; overflow-y: auto;"></div>
+                    </div>
+                    
+                    <div class="form-container shadow" style="border: 2px solid #dc3545;">
+                        <h3 style="color: #dc3545;">Refatoração em Lote (CUIDADO)</h3>
+                        <p style="font-size: 11px; color: #666; margin-bottom: 15px;">Atenção: A alteração abaixo reescreverá todas as tarefas vinculadas ao projeto selecionado.</p>
+                        <div class="form-group"><label>Selecione o Projeto Alvo</label><select id="adminProjectSelect"></select></div>
+                        <div class="form-group"><label>Novo Nome do Projeto</label><input type="text" id="adminNewProjectName" placeholder="Deixe em branco para manter"></div>
+                        <div class="form-group"><label>Realocar para Nova Área</label><select id="adminProjectNewArea"></select></div>
+                        <button onclick="refatorarProjetoCascata()" class="btn-danger" style="width: 100%;">APLICAR MUDANÇA EM CASCATA</button>
+                    </div>
+                </div>
+            </section>
         </main>
     </div>
 
     <div id="drilldownModal" class="modal">
         <div class="modal-content shadow" style="max-width: 900px;">
-            <div class="modal-header">
-                <h3 id="drilldownTitle">Detalhamento Analítico</h3>
-                <button onclick="closeDrilldown()" class="close-btn">&times;</button>
-            </div>
+            <div class="modal-header"><h3 id="drilldownTitle">Raio-X</h3><button onclick="closeDrilldown()" class="close-btn">&times;</button></div>
             <div class="table-container" style="max-height: 50vh; overflow-y: auto; margin-top: 15px;">
                 <table style="width: 100%;">
-                    <thead>
-                        <tr>
-                            <th>Área</th>
-                            <th>Projeto</th>
-                            <th>Tarefa</th>
-                            <th>Prazo Final</th>
-                            <th>Responsáveis</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="drilldownBody">
-                        </tbody>
+                    <thead><tr><th>Área</th><th>Projeto</th><th>Tarefa</th><th>Prazo Final</th><th>Responsáveis</th><th>Status</th></tr></thead>
+                    <tbody id="drilldownBody"></tbody>
                 </table>
-            </div>
-            <div class="modal-footer">
-                <button onclick="closeDrilldown()" class="btn-secondary">Fechar Raio-X</button>
             </div>
         </div>
     </div>
 
     <div id="taskModal" class="modal">
-        <div class="modal-content shadow">
-            <div class="modal-header">
-                <h3>Gestão da Demanda</h3>
-                <button onclick="closeModal()" class="close-btn">&times;</button>
-            </div>
+        <div class="modal-content shadow" style="max-width: 750px;">
+            <div class="modal-header"><h3>Gestão da Demanda</h3><button onclick="closeModal()" class="close-btn">&times;</button></div>
+            
             <div class="form-grid">
-                <div class="form-group">
-                    <label>Área Estratégica</label>
-                    <input type="text" id="editArea" list="areaList">
-                </div>
-                <div class="form-group">
-                    <label>Projeto</label>
-                    <input type="text" id="editProject" list="projectsList">
-                </div>
+                <div class="form-group"><label>Área (Somente Leitura)</label><input type="text" id="editArea" disabled class="readonly-field"></div>
+                <div class="form-group"><label>Projeto (Somente Leitura)</label><input type="text" id="editProject" disabled class="readonly-field"></div>
             </div>
+            
             <div class="form-group"><label>Título da Demanda</label><input type="text" id="editTitle"></div>
             <div class="form-group"><label>Escopo Original</label><textarea id="editDesc" rows="3" readonly class="readonly-field"></textarea></div>
+            
+            <hr style="margin: 15px 0; border: 0; border-top: 1px solid #eee;">
+            
+            <div class="form-group">
+                <label style="color: #000;">Equipe Alocada na Tarefa</label>
+                <div id="edit-responsaveis-container"></div>
+                <button onclick="addResponsavelField('edit-responsaveis-container')" class="btn-text" id="btn-add-edit-resp">+ Adicionar Envolvido</button>
+            </div>
+
+            <hr style="margin: 15px 0; border: 0; border-top: 1px solid #eee;">
+
             <div class="form-grid">
                 <div class="form-group"><label>Início</label><input type="date" id="editDateStart"></div>
                 <div class="form-group"><label>Prazo</label><input type="date" id="editDateEnd"></div>
