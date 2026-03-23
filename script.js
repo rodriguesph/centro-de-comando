@@ -269,7 +269,7 @@ function renderUsers() {
 async function removerUsuario(id) { if(confirm("Revogar acesso deste membro?")) await db.collection('usuarios').doc(id).delete(); }
 
 // ==========================================================================
-// 5. INCLUSÃO (CRIA TAREFAS INDEPENDENTES CLONADAS)
+// 5. INCLUSÃO CASCATA E DUPLICAÇÃO DE TAREFAS
 // ==========================================================================
 function populateUserSelectsMaster() {
     const optionsHTML = '<option value="">Selecione...</option>' + allUsers.map(u => `<option value="${u.email}">${u.nome}</option>`).join('');
@@ -314,15 +314,60 @@ function coletarEquipeDeContainer(containerId) {
     return resps;
 }
 
+// O MOTOR CASCATA DE INCLUSÃO
+function tratarSelecaoAreaNovoProjeto() {
+    const areaSelect = document.getElementById('areaInput');
+    const projSelect = document.getElementById('projectSelect');
+    const projInput = document.getElementById('projectInputNovo');
+
+    if(!areaSelect || !projSelect) return;
+
+    const selectedArea = areaSelect.value;
+    projSelect.innerHTML = '';
+    projInput.style.display = 'none';
+    projInput.value = '';
+
+    if (!selectedArea) {
+        projSelect.innerHTML = '<option value="">Selecione a Área primeiro...</option>';
+        return;
+    }
+
+    let projsInArea = allTasks.filter(t => (t.area || 'Sem Área') === selectedArea).map(t => t.project);
+    if (currentUserRole !== 'super-admin') { projsInArea = projsInArea.filter(p => managedProjects.includes(p)); }
+
+    const uniqueProjs = [...new Set(projsInArea)].sort((a, b) => a.localeCompare(b));
+
+    let html = '<option value="">Selecione um Projeto existente...</option>';
+    html += '<option value="NOVO_PROJETO" style="font-weight:bold; color:#2563eb;">➕ CRIAR NOVO PROJETO</option>';
+    uniqueProjs.forEach(p => { html += `<option value="${p}">${p}</option>`; });
+
+    projSelect.innerHTML = html;
+}
+
+function tratarSelecaoProjetoNovo() {
+    const projSelect = document.getElementById('projectSelect');
+    const projInput = document.getElementById('projectInputNovo');
+    if(projSelect.value === 'NOVO_PROJETO') {
+        projInput.style.display = 'block';
+        projInput.focus();
+    } else {
+        projInput.style.display = 'none';
+        projInput.value = '';
+    }
+}
+
 async function saveDemand() {
     const area = document.getElementById('areaInput').value;
-    const project = document.getElementById('projectInput').value.trim();
+    const projSelectVal = document.getElementById('projectSelect').value;
+    const projInputVal = document.getElementById('projectInputNovo').value.trim();
+    const project = projSelectVal === 'NOVO_PROJETO' ? projInputVal : projSelectVal;
+    
     const title = document.getElementById('taskTitle').value.trim();
     const desc = document.getElementById('taskDesc').value.trim();
     const dateStart = document.getElementById('dateInputStart').value;
     const dateEnd = document.getElementById('dateInputEnd').value;
     
-    if (currentUserRole !== 'super-admin' && !managedAreas.includes(area) && !managedProjects.includes(project)) {
+    if (currentUserRole !== 'super-admin' && !managedAreas.includes(area) && !managedProjects.includes(project) && projSelectVal !== 'NOVO_PROJETO') {
         return alert("Acesso Negado: Sem permissão nesta área/projeto.");
     }
 
@@ -352,8 +397,31 @@ async function saveDemand() {
     } catch (e) { alert("Erro ao lançar as demandas."); }
 }
 
+// A CLONAGEM DE DEMANDA A PARTIR DO MODAL
+async function duplicarTask() {
+    const t = allTasks.find(x => x.id === currentTaskId);
+    if(!t) return;
+
+    if(!confirm(`Deseja criar uma cópia da demanda "${t.text}"?`)) return;
+
+    try {
+        const batch = db.batch();
+        const newDocRef = db.collection('tarefas').doc();
+        batch.set(newDocRef, {
+            area: t.area || "Sem Área", project: t.project, text: t.text, descricao: t.descricao || "",
+            data_inicio: t.data_inicio || "", data_fim: t.data_fim || "", status: 'fazer',
+            resps: t.resps || [], criadoEm: new Date(), historico: [{ data: new Date().toLocaleString('pt-BR'), autor: "SISTEMA", texto: `Demanda duplicada a partir de outra tarefa.` }],
+            email: t.email || (t.resps && t.resps.length > 0 ? t.resps[0].email : "")
+        });
+        
+        await batch.commit();
+        alert("Tarefa duplicada com sucesso! Você está editando a cópia agora.");
+        abrirModal(newDocRef.id);
+    } catch (e) { alert("Erro ao duplicar a demanda."); }
+}
+
 // ==========================================================================
-// 6. VISÃO OPERACIONAL (AGORA COM FILTRO EM CASCATA) E MODAL DE EDIÇÃO
+// 6. VISÃO OPERACIONAL E MODAL DE EDIÇÃO
 // ==========================================================================
 function getVisibleTasksBoard() {
     if (currentUserRole === 'super-admin') return allTasks;
@@ -372,10 +440,12 @@ function updateProjectAndAreaLists() {
     }
     
     if(areaSelect) {
+        const currentVal = areaSelect.value;
         areaSelect.innerHTML = '<option value="">Selecione a Área...</option>' + allowedAreas.map(a => `<option value="${a}">${a}</option>`).join('');
+        if(currentVal && allowedAreas.includes(currentVal)) areaSelect.value = currentVal;
+        tratarSelecaoAreaNovoProjeto(); // Aciona o gatilho da cascata no Novo Projeto
     }
 
-    // Injeta os Filtros no Operacional
     const filterAreaOp = document.getElementById('filterAreaOp');
     if(filterAreaOp) {
         const currArea = filterAreaOp.value;
@@ -383,10 +453,9 @@ function updateProjectAndAreaLists() {
         if(currArea && allowedAreas.includes(currArea)) filterAreaOp.value = currArea;
     }
 
-    updateOpProjectFilter(); // Dispara o gatilho da cascata Operacional
+    updateOpProjectFilter(); 
 }
 
-// O MOTOR CASCATA DA ABA OPERACIONAL
 function updateOpProjectFilter() {
     const filterAreaOp = document.getElementById('filterAreaOp');
     const filterProjectOp = document.getElementById('filterProjectOp');
@@ -394,10 +463,7 @@ function updateOpProjectFilter() {
 
     const selectedArea = filterAreaOp.value;
     let tasks = getVisibleTasksBoard();
-
-    if (selectedArea !== 'geral') {
-        tasks = tasks.filter(t => (t.area || 'Sem Área') === selectedArea);
-    }
+    if (selectedArea !== 'geral') { tasks = tasks.filter(t => (t.area || 'Sem Área') === selectedArea); }
 
     const projects = [...new Set(tasks.map(t => t.project))].sort((a, b) => a.localeCompare(b));
     const currProj = filterProjectOp.value;
@@ -470,8 +536,7 @@ function renderBoard(filteredTasks) {
 }
 
 function abrirModal(id) {
-    closeDrilldown(); // GARANTE QUE SE ESTIVER VINDO DO BI, O DRILLDOWN FECHA PRIMEIRO
-
+    closeDrilldown(); 
     currentTaskId = id;
     const t = allTasks.find(x => x.id === id);
     document.getElementById('taskModal').classList.add('active');
@@ -489,16 +554,13 @@ function abrirModal(id) {
     document.getElementById('editDateEnd').disabled = !isGestorPleno;
     document.getElementById('editDesc').value = t.descricao || "";
     
-    // A RECONSTRUÇÃO DO SELECT PARA BLINDAR O NAVEGADOR
     const statusSelect = document.getElementById('editStatus');
     statusSelect.innerHTML = `
         <option value="fazer">Não Iniciada</option>
         <option value="andamento">Em Execução</option>
         <option value="aprovacao">Aguardando Validação</option>
     `;
-    if (isGestorPleno || t.status === 'concluido') {
-        statusSelect.innerHTML += `<option value="concluido">Concluída</option>`;
-    }
+    if (isGestorPleno || t.status === 'concluido') { statusSelect.innerHTML += `<option value="concluido">Concluída</option>`; }
     statusSelect.value = t.status;
     
     const containerResps = document.getElementById('edit-responsaveis-container');
@@ -510,6 +572,7 @@ function abrirModal(id) {
     document.querySelectorAll('.btn-remove-resp').forEach(btn => btn.style.display = isGestorPleno ? 'inline-block' : 'none');
 
     document.getElementById('btn-delete-task').style.display = isGestorPleno ? 'inline-block' : 'none';
+    document.getElementById('btn-duplicar-task').style.display = isGestorPleno ? 'inline-block' : 'none';
     
     const hist = document.getElementById('modalHistorico');
     hist.innerHTML = (t.historico && t.historico.length > 0) ? t.historico.map(h => `<div class="history-item"><strong>${h.autor.split('@')[0]}</strong> <small>${h.data}</small><br>${h.texto}</div>`).join('') : "<em>Sem reportes.</em>";
@@ -530,13 +593,37 @@ async function saveModalChanges() {
     const isGestorPleno = currentUserRole === 'super-admin' || managedAreas.includes(t.area) || managedProjects.includes(t.project);
     const report = document.getElementById('newReport').value.trim();
     
-    const update = { status: document.getElementById('editStatus').value };
+    const currentStatus = document.getElementById('editStatus').value;
+    const currentTitle = document.getElementById('editTitle').value.trim();
+    const currentDataInicio = document.getElementById('editDateStart').value;
+    const currentDataFim = document.getElementById('editDateEnd').value;
+    const currentResps = coletarEquipeDeContainer('edit-responsaveis-container');
     
+    // SISTEMA ANTIFRAUDE E VERIFICADOR DE ALTERAÇÕES
+    let hasAnyChange = false;
+    if (report !== "") hasAnyChange = true;
+    if (currentStatus !== t.status) hasAnyChange = true;
+    if (isGestorPleno) {
+        if (currentTitle !== t.text) hasAnyChange = true;
+        if (currentDataInicio !== (t.data_inicio || "")) hasAnyChange = true;
+        if (currentDataFim !== (t.data_fim || "")) hasAnyChange = true;
+        const cRespsStr = JSON.stringify(currentResps.map(r=>r.email).sort());
+        const tRespsStr = JSON.stringify((t.resps || []).map(r=>r.email).sort());
+        if (cRespsStr !== tRespsStr) hasAnyChange = true;
+    }
+
+    if (!hasAnyChange) {
+        const manter = confirm("Nenhuma alteração de texto, equipe ou data foi detectada nesta atividade.\nDeseja mesmo salvá-la mantendo-a exatamente igual no banco de dados?");
+        if (!manter) return; 
+        else { closeModal(); return; }
+    }
+
+    const update = { status: currentStatus };
     if(isGestorPleno) {
-        update.text = document.getElementById('editTitle').value;
-        update.data_inicio = document.getElementById('editDateStart').value;
-        update.data_fim = document.getElementById('editDateEnd').value;
-        update.resps = coletarEquipeDeContainer('edit-responsaveis-container');
+        update.text = currentTitle;
+        update.data_inicio = currentDataInicio;
+        update.data_fim = currentDataFim;
+        update.resps = currentResps;
     }
     
     let hasMeaningfulChange = false; let systemMsg = "";
@@ -787,7 +874,6 @@ function openDrilldown(type) {
         tbody.innerHTML = targetTasks.map(t => {
             const respNames = t.resps && t.resps.length > 0 ? t.resps.map(r => r.nome.split(' ')[0]).join(', ') : '-';
             const cStatus = getCalculatedStatus(t);
-            // O GRANDE TRUQUE DE COMANDO: O Drilldown agora é clicável e fecha antes de abrir o modal.
             return `<tr onclick="abrirModal('${t.id}')" style="cursor:pointer" title="Clique para editar a Demanda">
                 <td style="font-size:11px; color:#666;">${t.area || '-'}</td>
                 <td class="bold">${t.project}</td>
