@@ -13,6 +13,7 @@ let managedProjects = [];
 let biChartProgress = null;
 let biChartTeam = null;
 let biSelectedUsers = []; 
+let biSelectedStatuses = []; // NOVO: Rastreia os cliques no gráfico de rosca (Status)
 
 // ==========================================================================
 // MOTOR LÓGICO DE STATUS EM TEMPO REAL
@@ -66,7 +67,7 @@ function updateNavVisibility() {
 }
 
 // ==========================================================================
-// 2. AUTENTICAÇÃO E CARGA DE DADOS
+// 2. AUTENTICAÇÃO E CARGA
 // ==========================================================================
 auth.onAuthStateChanged(async user => {
     if (user) {
@@ -224,7 +225,6 @@ function prepararEdicaoProjeto(projName, currArea) {
     document.getElementById('adminProjectNewArea').value = currArea !== 'Sem Área' ? currArea : '';
     document.getElementById('admin-edit-project-form').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
-
 function cancelarEdicaoProjetoAdmin() { document.getElementById('admin-edit-project-form').style.display = 'none'; }
 
 async function refatorarProjetoCascata() {
@@ -314,7 +314,6 @@ function coletarEquipeDeContainer(containerId) {
     return resps;
 }
 
-// O MOTOR CASCATA DE INCLUSÃO
 function tratarSelecaoAreaNovoProjeto() {
     const areaSelect = document.getElementById('areaInput');
     const projSelect = document.getElementById('projectSelect');
@@ -347,13 +346,8 @@ function tratarSelecaoAreaNovoProjeto() {
 function tratarSelecaoProjetoNovo() {
     const projSelect = document.getElementById('projectSelect');
     const projInput = document.getElementById('projectInputNovo');
-    if(projSelect.value === 'NOVO_PROJETO') {
-        projInput.style.display = 'block';
-        projInput.focus();
-    } else {
-        projInput.style.display = 'none';
-        projInput.value = '';
-    }
+    if(projSelect.value === 'NOVO_PROJETO') { projInput.style.display = 'block'; projInput.focus(); } 
+    else { projInput.style.display = 'none'; projInput.value = ''; }
 }
 
 async function saveDemand() {
@@ -397,11 +391,9 @@ async function saveDemand() {
     } catch (e) { alert("Erro ao lançar as demandas."); }
 }
 
-// A CLONAGEM DE DEMANDA A PARTIR DO MODAL
 async function duplicarTask() {
     const t = allTasks.find(x => x.id === currentTaskId);
     if(!t) return;
-
     if(!confirm(`Deseja criar uma cópia da demanda "${t.text}"?`)) return;
 
     try {
@@ -410,18 +402,18 @@ async function duplicarTask() {
         batch.set(newDocRef, {
             area: t.area || "Sem Área", project: t.project, text: t.text, descricao: t.descricao || "",
             data_inicio: t.data_inicio || "", data_fim: t.data_fim || "", status: 'fazer',
-            resps: t.resps || [], criadoEm: new Date(), historico: [{ data: new Date().toLocaleString('pt-BR'), autor: "SISTEMA", texto: `Demanda duplicada a partir de outra tarefa.` }],
+            resps: t.resps || [], criadoEm: new Date(), historico: [{ data: new Date().toLocaleString('pt-BR'), autor: "SISTEMA", texto: `Demanda duplicada.` }],
             email: t.email || (t.resps && t.resps.length > 0 ? t.resps[0].email : "")
         });
         
         await batch.commit();
-        alert("Tarefa duplicada com sucesso! Você está editando a cópia agora.");
+        alert("Tarefa duplicada! Você está editando a cópia agora.");
         abrirModal(newDocRef.id);
     } catch (e) { alert("Erro ao duplicar a demanda."); }
 }
 
 // ==========================================================================
-// 6. VISÃO OPERACIONAL E MODAL DE EDIÇÃO
+// 6. VISÃO OPERACIONAL E MODAL PROGRESSIVO
 // ==========================================================================
 function getVisibleTasksBoard() {
     if (currentUserRole === 'super-admin') return allTasks;
@@ -443,7 +435,7 @@ function updateProjectAndAreaLists() {
         const currentVal = areaSelect.value;
         areaSelect.innerHTML = '<option value="">Selecione a Área...</option>' + allowedAreas.map(a => `<option value="${a}">${a}</option>`).join('');
         if(currentVal && allowedAreas.includes(currentVal)) areaSelect.value = currentVal;
-        tratarSelecaoAreaNovoProjeto(); // Aciona o gatilho da cascata no Novo Projeto
+        tratarSelecaoAreaNovoProjeto(); 
     }
 
     const filterAreaOp = document.getElementById('filterAreaOp');
@@ -452,7 +444,6 @@ function updateProjectAndAreaLists() {
         filterAreaOp.innerHTML = '<option value="geral">Todas as Áreas</option>' + allowedAreas.map(a => `<option value="${a}">${a}</option>`).join('');
         if(currArea && allowedAreas.includes(currArea)) filterAreaOp.value = currArea;
     }
-
     updateOpProjectFilter(); 
 }
 
@@ -470,7 +461,6 @@ function updateOpProjectFilter() {
 
     filterProjectOp.innerHTML = '<option value="geral">Todos os Projetos</option>' + projects.map(p => `<option value="${p}">${p}</option>`).join('');
     if(currProj && projects.includes(currProj)) filterProjectOp.value = currProj;
-
     renderDashboard(); 
 }
 
@@ -535,11 +525,23 @@ function renderBoard(filteredTasks) {
     board.innerHTML = html;
 }
 
+// REVELAÇÃO PROGRESSIVA
+function revealInteractionPanel() {
+    document.getElementById('btn-interact').style.display = 'none';
+    document.getElementById('interaction-panel').style.display = 'block';
+    document.getElementById('modal-action-footer').style.display = 'flex';
+}
+
 function abrirModal(id) {
     closeDrilldown(); 
     currentTaskId = id;
     const t = allTasks.find(x => x.id === id);
     document.getElementById('taskModal').classList.add('active');
+    
+    // Reseta a visão progressiva
+    document.getElementById('btn-interact').style.display = 'block';
+    document.getElementById('interaction-panel').style.display = 'none';
+    document.getElementById('modal-action-footer').style.display = 'none';
     
     const isGestorPleno = currentUserRole === 'super-admin' || managedAreas.includes(t.area) || managedProjects.includes(t.project);
     
@@ -567,6 +569,8 @@ function abrirModal(id) {
     containerResps.innerHTML = ''; 
     if(t.resps) { t.resps.forEach(r => addResponsavelField('edit-responsaveis-container', r.email, r.papel)); }
     
+    // Esconde o painel de equipe se não for gestor
+    document.getElementById('gestor-equipe-panel').style.display = isGestorPleno ? 'block' : 'none';
     document.getElementById('btn-add-edit-resp').style.display = isGestorPleno ? 'inline-block' : 'none';
     document.querySelectorAll('#edit-responsaveis-container select').forEach(sel => sel.disabled = !isGestorPleno);
     document.querySelectorAll('.btn-remove-resp').forEach(btn => btn.style.display = isGestorPleno ? 'inline-block' : 'none');
@@ -597,9 +601,8 @@ async function saveModalChanges() {
     const currentTitle = document.getElementById('editTitle').value.trim();
     const currentDataInicio = document.getElementById('editDateStart').value;
     const currentDataFim = document.getElementById('editDateEnd').value;
-    const currentResps = coletarEquipeDeContainer('edit-responsaveis-container');
+    const currentResps = isGestorPleno ? coletarEquipeDeContainer('edit-responsaveis-container') : t.resps;
     
-    // SISTEMA ANTIFRAUDE E VERIFICADOR DE ALTERAÇÕES
     let hasAnyChange = false;
     if (report !== "") hasAnyChange = true;
     if (currentStatus !== t.status) hasAnyChange = true;
@@ -613,17 +616,14 @@ async function saveModalChanges() {
     }
 
     if (!hasAnyChange) {
-        const manter = confirm("Nenhuma alteração de texto, equipe ou data foi detectada nesta atividade.\nDeseja mesmo salvá-la mantendo-a exatamente igual no banco de dados?");
-        if (!manter) return; 
-        else { closeModal(); return; }
+        const manter = confirm("Nenhuma alteração foi detectada.\nDeseja salvar mesmo assim?");
+        if (!manter) return; else { closeModal(); return; }
     }
 
     const update = { status: currentStatus };
     if(isGestorPleno) {
-        update.text = currentTitle;
-        update.data_inicio = currentDataInicio;
-        update.data_fim = currentDataFim;
-        update.resps = currentResps;
+        update.text = currentTitle; update.data_inicio = currentDataInicio;
+        update.data_fim = currentDataFim; update.resps = currentResps;
     }
     
     let hasMeaningfulChange = false; let systemMsg = "";
@@ -664,7 +664,7 @@ async function saveModalChanges() {
 async function deleteTask() { if(confirm("Excluir definitivamente?")) { await db.collection('tarefas').doc(currentTaskId).delete(); closeModal(); } }
 
 // ==========================================================================
-// 7. BUSINESS INTELLIGENCE
+// 7. BUSINESS INTELLIGENCE AVANÇADO (CROSS-FILTERING TOTAL)
 // ==========================================================================
 function toggleFilterMenu(type) { 
     document.querySelectorAll('.dropdown-content').forEach(el => { if (el.id !== `filter-checkboxes-${type}`) el.classList.remove('show'); });
@@ -688,7 +688,7 @@ function updateBIAreaFilter() {
 
 function toggleAllAreas(masterCheckbox) { 
     document.querySelectorAll('.bi-area-check').forEach(cb => cb.checked = masterCheckbox.checked); 
-    biSelectedUsers = []; 
+    biSelectedUsers = []; biSelectedStatuses = [];
     updateBIProjectFilter(); 
 }
 
@@ -712,17 +712,17 @@ function updateBIProjectFilter() {
         html += `<label class="checkbox-item"><input type="checkbox" class="bi-proj-check" value="${p}" onchange="triggerRenderNativeBI()" ${isChecked}>${p}</label>`;
     });
     container.innerHTML = html;
-    biSelectedUsers = []; 
+    biSelectedUsers = []; biSelectedStatuses = [];
     renderNativeBI(); 
 }
 
 function toggleAllProjects(masterCheckbox) { 
     document.querySelectorAll('.bi-proj-check').forEach(cb => cb.checked = masterCheckbox.checked); 
-    biSelectedUsers = []; 
+    biSelectedUsers = []; biSelectedStatuses = [];
     renderNativeBI(); 
 }
 
-function triggerRenderNativeBI() { biSelectedUsers = []; renderNativeBI(); }
+function triggerRenderNativeBI() { biSelectedUsers = []; biSelectedStatuses = []; renderNativeBI(); }
 
 function renderNativeBI() {
     const masterCheck = document.getElementById('check-all-proj');
@@ -731,6 +731,7 @@ function renderNativeBI() {
     const selectedAreas = Array.from(document.querySelectorAll('.bi-area-check:checked')).map(cb => cb.value);
     const masterAreaCheck = document.getElementById('check-all-area');
     
+    // 1. BASE DE TAREFAS (Macro Filtro de Área e Projeto)
     let baseTasks = currentUserRole === 'super-admin' ? allTasks : allTasks.filter(t => managedAreas.includes(t.area) || managedProjects.includes(t.project));
     if (!(masterAreaCheck && masterAreaCheck.checked)) { baseTasks = baseTasks.filter(t => selectedAreas.includes(t.area || 'Sem Área')); }
 
@@ -738,8 +739,16 @@ function renderNativeBI() {
     else if (checkboxes.length > 0) { btnText.innerText = `${checkboxes.length} PROJETO(S) ▾`; baseTasks = baseTasks.filter(t => checkboxes.includes(t.project)); } 
     else { btnText.innerText = "NENHUM PROJETO ▾"; baseTasks = []; }
 
+    // 2. CONSTRUÇÃO DO GRÁFICO DE BARRAS (EQUIPE)
+    // O gráfico de barras usa a baseTasks (ignorando se algum status foi clicado)
+    let teamTasks = baseTasks;
+    if (biSelectedStatuses.length > 0) {
+        // Se clicar no status, o gráfico de time também se filtra? Melhor sim, cruzamento bidirecional.
+        teamTasks = baseTasks.filter(t => biSelectedStatuses.includes(getCalculatedStatus(t).id));
+    }
+
     const teamLoad = {};
-    baseTasks.forEach(t => { 
+    teamTasks.forEach(t => { 
         if(t.resps && t.resps.length > 0) { t.resps.forEach(r => { const rn = r.nome.split(' ')[0]; teamLoad[rn] = (teamLoad[rn] || 0) + 1; }); } 
         else { teamLoad['Sem Dono'] = (teamLoad['Sem Dono'] || 0) + 1; }
     });
@@ -753,7 +762,7 @@ function renderNativeBI() {
 
     if(biChartTeam) biChartTeam.destroy();
     biChartTeam = new Chart(document.getElementById('biTeamChart'), { 
-        type: 'bar', data: { labels: barLabels, datasets: [{ label: 'Tarefas Atribuídas', data: barData, backgroundColor: bgColors, borderRadius: 4 }] }, 
+        type: 'bar', data: { labels: barLabels, datasets: [{ label: 'Tarefas', data: barData, backgroundColor: bgColors, borderRadius: 4 }] }, 
         options: { 
             responsive: true, maintainAspectRatio: false,
             onClick: (e, elements) => {
@@ -767,16 +776,61 @@ function renderNativeBI() {
         } 
     });
 
+    // 3. CONSTRUÇÃO DO GRÁFICO DE ROSCA (STATUS CROSS-FILTER)
+    let pieTasks = baseTasks;
     if (biSelectedUsers.length > 0) {
-        currentFilteredTasks = baseTasks.filter(t => {
+        pieTasks = baseTasks.filter(t => {
             if (biSelectedUsers.includes('Sem Dono') && (!t.resps || t.resps.length === 0)) return true;
             if (!t.resps) return false;
             return t.resps.some(r => biSelectedUsers.includes(r.nome.split(' ')[0]));
         });
-    } else { currentFilteredTasks = baseTasks; }
+    }
 
+    let pieKpis = { nao_iniciada:0, atrasada:0, execucao:0, aguardando:0, critica:0, concluida:0 };
+    pieTasks.forEach(t => pieKpis[getCalculatedStatus(t).id]++);
+
+    const pieLabels = ['Não Iniciadas', 'Atraso p/ Início', 'Em Execução', 'Aguardando OK', 'Críticas', 'Concluídas'];
+    const pieData = [pieKpis.nao_iniciada, pieKpis.atrasada, pieKpis.execucao, pieKpis.aguardando, pieKpis.critica, pieKpis.concluida];
+    const pieColorsBase = ['#94a3b8', '#f59e0b', '#3b82f6', '#10b981', '#dc3545', '#059669'];
+    const pieIds = ['nao_iniciada', 'atrasada', 'execucao', 'aguardando', 'critica', 'concluida'];
+
+    const pieColorsFinal = pieColorsBase.map((c, i) => {
+        if(biSelectedStatuses.length === 0) return c;
+        return biSelectedStatuses.includes(pieIds[i]) ? c : '#e2e8f0'; // Esmaece os não clicados
+    });
+
+    if(biChartProgress) biChartProgress.destroy();
+    biChartProgress = new Chart(document.getElementById('biProgressChart'), { 
+        type: 'doughnut', data: { labels: pieLabels, datasets: [{ data: pieData, backgroundColor: pieColorsFinal }] }, 
+        options: { 
+            responsive: true, maintainAspectRatio: false, cutout: '50%', 
+            plugins: { tooltip: { callbacks: { label: function(c) { let v=c.parsed, t=c.dataset.data.reduce((a,b)=>a+b,0), p=t>0?Math.round((v/t)*100):0; return ` ${c.label}: ${v} (${p}%)`; }}}},
+            onClick: (e, elements) => {
+                if (elements.length > 0) {
+                    const clickedStatus = pieIds[elements[0].index];
+                    if (biSelectedStatuses.includes(clickedStatus)) { biSelectedStatuses = biSelectedStatuses.filter(s => s !== clickedStatus); } 
+                    else { biSelectedStatuses.push(clickedStatus); }
+                    renderNativeBI(); 
+                }
+            }
+        } 
+    });
+
+    // 4. APLICAÇÃO DOS MICRO-FILTROS (Cruzamento Total)
+    currentFilteredTasks = baseTasks;
+    if (biSelectedUsers.length > 0) {
+        currentFilteredTasks = currentFilteredTasks.filter(t => {
+            if (biSelectedUsers.includes('Sem Dono') && (!t.resps || t.resps.length === 0)) return true;
+            if (!t.resps) return false;
+            return t.resps.some(r => biSelectedUsers.includes(r.nome.split(' ')[0]));
+        });
+    }
+    if (biSelectedStatuses.length > 0) {
+        currentFilteredTasks = currentFilteredTasks.filter(t => biSelectedStatuses.includes(getCalculatedStatus(t).id));
+    }
+
+    // 5. CÁLCULO DOS KPIS DE TOPO
     let kpis = { total: currentFilteredTasks.length, nao_iniciada: 0, atrasada: 0, execucao: 0, aguardando: 0, critica: 0, concluidas: 0 };
-
     currentFilteredTasks.forEach(t => {
         const cStatus = getCalculatedStatus(t);
         if (cStatus.id === 'nao_iniciada') kpis.nao_iniciada++;
@@ -795,16 +849,10 @@ function renderNativeBI() {
     document.getElementById('bi-kpi-critica').innerText = kpis.critica;
 
     let influencePerc = 100;
-    if (baseTasks.length > 0 && biSelectedUsers.length > 0) { influencePerc = Math.round((currentFilteredTasks.length / baseTasks.length) * 100); } 
-    else if (baseTasks.length === 0) { influencePerc = 0; }
+    if (baseTasks.length > 0 && (biSelectedUsers.length > 0 || biSelectedStatuses.length > 0)) { 
+        influencePerc = Math.round((currentFilteredTasks.length / baseTasks.length) * 100); 
+    } else if (baseTasks.length === 0) { influencePerc = 0; }
     document.getElementById('bi-kpi-influencia').innerText = influencePerc + '%';
-
-    const pendentes = kpis.total - kpis.concluidas;
-    if(biChartProgress) biChartProgress.destroy();
-    biChartProgress = new Chart(document.getElementById('biProgressChart'), { 
-        type: 'doughnut', data: { labels: ['Concluídas', 'Pendentes'], datasets: [{ data: [kpis.concluidas, pendentes], backgroundColor: ['#10b981', '#1e293b'] }] }, 
-        options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { tooltip: { callbacks: { label: function(c) { let v=c.parsed, t=c.dataset.data.reduce((a,b)=>a+b,0), p=t>0?Math.round((v/t)*100):0; return ` ${c.label}: ${v} (${p}%)`; }}}}} 
-    });
 
     drawExecutiveGantt(currentFilteredTasks);
 }

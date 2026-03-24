@@ -8,21 +8,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap" rel="stylesheet">
-    
     <link rel="stylesheet" href="style.css">
-
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
-    
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
-    <script type="text/javascript">
-        (function() {
-            emailjs.init("avO3v8VXJm6ZQyZ9a");
-        })();
-    </script>
+    <script type="text/javascript"> (function() { emailjs.init("avO3v8VXJm6ZQyZ9a"); })(); </script>
 </head>
 <body>
 
@@ -97,14 +89,20 @@
                     <div class="stat-card shadow clickable" style="border-left: 4px solid #dc3545;" title="GARGALO: O prazo final estourou e a entrega não foi feita." onclick="openDrilldown('critica')">
                         <h3 id="bi-kpi-critica">0</h3><p>Críticas (Vencidas)</p>
                     </div>
-                    <div class="stat-card shadow" style="border-left: 4px solid #8b5cf6; cursor: help;" title="O peso que os colaboradores selecionados no gráfico carregam na operação.">
+                    <div class="stat-card shadow" style="border-left: 4px solid #8b5cf6; cursor: help;" title="O peso que os colaboradores/status selecionados no gráfico carregam na operação.">
                         <h3 id="bi-kpi-influencia">100%</h3><p>Influência</p>
                     </div>
                 </div>
 
                 <div class="bi-charts-row">
-                    <div class="bi-chart-card shadow"><h4>Progresso Geral</h4><div class="canvas-container"><canvas id="biProgressChart"></canvas></div></div>
-                    <div class="bi-chart-card shadow"><h4>Volume por Responsável</h4><div class="canvas-container"><canvas id="biTeamChart"></canvas></div></div>
+                    <div class="bi-chart-card shadow">
+                        <h4>Distribuição por Status</h4>
+                        <div class="canvas-container"><canvas id="biProgressChart"></canvas></div>
+                    </div>
+                    <div class="bi-chart-card shadow">
+                        <h4>Volume por Responsável</h4>
+                        <div class="canvas-container"><canvas id="biTeamChart"></canvas></div>
+                    </div>
                 </div>
 
                 <div class="bi-gantt-card shadow">
@@ -124,15 +122,11 @@
                     <div class="form-grid">
                         <div class="form-group">
                             <label>Área Estratégica</label>
-                            <select id="areaInput" onchange="tratarSelecaoAreaNovoProjeto()">
-                                <option value="">Carregando...</option>
-                            </select>
+                            <select id="areaInput" onchange="tratarSelecaoAreaNovoProjeto()"><option value="">Carregando...</option></select>
                         </div>
                         <div class="form-group">
                             <label>Projeto</label>
-                            <select id="projectSelect" onchange="tratarSelecaoProjetoNovo()">
-                                <option value="">Selecione a Área primeiro...</option>
-                            </select>
+                            <select id="projectSelect" onchange="tratarSelecaoProjetoNovo()"><option value="">Selecione a Área primeiro...</option></select>
                             <input type="text" id="projectInputNovo" placeholder="Digite o nome do novo projeto..." style="display:none; margin-top:10px;">
                         </div>
                     </div>
@@ -181,24 +175,18 @@
             <section id="sec-admin" class="content-section">
                 <div class="section-header"><h2>Controle Arquitetural</h2></div>
                 <div class="form-grid">
-                    
                     <div class="form-container shadow">
                         <h3>Gestão de Áreas Estratégicas</h3>
-                        
                         <div class="form-group">
                             <label>Selecione uma área para editar ou crie uma nova</label>
-                            <select id="adminAreaSelect" class="input-padrao" onchange="tratarSelecaoAreaAdmin()">
-                                </select>
+                            <select id="adminAreaSelect" class="input-padrao" onchange="tratarSelecaoAreaAdmin()"></select>
                             <input type="text" id="adminAreaInput" placeholder="Digite o nome da nova área..." style="display: none; margin-top: 10px;">
                         </div>
-
                         <div class="form-group">
-                            <label>Gestores desta Área (Marque para dar poder, desmarque para tirar)</label>
-                            <div id="adminAreaGestoresContainer" style="max-height: 180px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 4px; background: #f8fafc;">
-                                </div>
+                            <label>Gestores desta Área</label>
+                            <div id="adminAreaGestoresContainer" style="max-height: 180px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 4px; background: #f8fafc;"></div>
                         </div>
                         <button onclick="salvarAreaEstrategica()" class="btn-primary" style="width: 100%;">SALVAR CONFIGURAÇÃO DA ÁREA</button>
-                        
                         <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
                         <h4>Áreas Ativas no Sistema</h4>
                         <div id="admin-areas-list" style="font-size: 11px; max-height: 200px; overflow-y: auto;"></div>
@@ -207,27 +195,18 @@
                     <div class="form-container shadow" style="border-top: 4px solid #dc3545;">
                         <h3 style="color: #dc3545; margin-top: 0;">Gestão de Projetos (Em Lote)</h3>
                         <p style="font-size: 11px; color: #666; margin-bottom: 10px;">Clique em um projeto para renomeá-lo ou movê-lo de área. A alteração reescreve todas as tarefas vinculadas.</p>
-                        
-                        <div id="admin-projects-list" style="max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 4px; margin-bottom: 15px;">
-                            </div>
+                        <div id="admin-projects-list" style="max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 4px; margin-bottom: 15px;"></div>
                         
                         <div id="admin-edit-project-form" style="display: none; background: #fff5f5; border: 1px solid #fc8181; padding: 15px; border-radius: 4px;">
                             <h4 style="color: #c53030; margin-top: 0; font-size: 12px;">Editando: <span id="adminEditProjTarget" style="font-weight: 700;"></span></h4>
-                            <div class="form-group">
-                                <label>Novo Nome do Projeto</label>
-                                <input type="text" id="adminNewProjectName">
-                            </div>
-                            <div class="form-group">
-                                <label>Realocar para Nova Área</label>
-                                <select id="adminProjectNewArea"></select>
-                            </div>
+                            <div class="form-group"><label>Novo Nome do Projeto</label><input type="text" id="adminNewProjectName"></div>
+                            <div class="form-group"><label>Realocar para Nova Área</label><select id="adminProjectNewArea"></select></div>
                             <div style="display: flex; gap: 10px; margin-top: 15px;">
                                 <button onclick="refatorarProjetoCascata()" class="btn-danger" style="flex: 2;">APLICAR EM CASCATA</button>
                                 <button onclick="cancelarEdicaoProjetoAdmin()" class="btn-secondary" style="flex: 1;">CANCELAR</button>
                             </div>
                         </div>
                     </div>
-
                 </div>
             </section>
         </main>
@@ -257,40 +236,49 @@
             <div class="form-group"><label>Título da Demanda</label><input type="text" id="editTitle"></div>
             <div class="form-group"><label>Escopo Original</label><textarea id="editDesc" rows="3" readonly class="readonly-field"></textarea></div>
             
-            <hr style="margin: 15px 0; border: 0; border-top: 1px solid #eee;">
-            
-            <div class="form-group">
-                <label style="color: #000;">Equipe Alocada na Tarefa</label>
-                <div id="edit-responsaveis-container"></div>
-                <button onclick="addResponsavelField('responsaveis-container')" class="btn-secondary" style="margin-top: 5px; padding: 5px 10px; font-size: 11px;">➕ Adicionar Outro Envolvido (Clonar Demanda)</button>
-            </div>
-
-            <hr style="margin: 15px 0; border: 0; border-top: 1px solid #eee;">
-
             <div class="form-grid">
                 <div class="form-group"><label>Início</label><input type="date" id="editDateStart"></div>
                 <div class="form-group"><label>Prazo</label><input type="date" id="editDateEnd"></div>
             </div>
-            <div class="form-grid">
+            
+            <button id="btn-interact" class="btn-primary" style="width: 100%; margin: 15px 0; font-size: 14px; padding: 12px; background-color: #0f172a;" onclick="revealInteractionPanel()">⚡ INTERAGIR COM A DEMANDA</button>
+
+            <div id="interaction-panel" style="display: none; background: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; border-radius: 6px; margin-top: 10px;">
+                
+                <div class="history-section" style="margin-bottom: 15px;">
+                    <label>Linha do Tempo / Reports Passados</label>
+                    <div id="modalHistorico" class="history-box" style="background: #fff; max-height: 120px;"></div>
+                </div>
+
+                <hr style="margin: 15px 0; border: 0; border-top: 1px solid #e2e8f0;">
+
                 <div class="form-group">
-                    <label>Status da Operação</label>
-                    <select id="editStatus">
+                    <label style="color: #dc3545; font-weight: bold;">Seu Novo Reporte (Opcional)</label>
+                    <textarea id="newReport" rows="2" placeholder="O que você avançou ou qual é o impedimento agora?"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label style="color: #0f172a; font-weight: bold;">Atualizar Status da Operação</label>
+                    <select id="editStatus" style="border: 2px solid #94a3b8; font-weight: bold;">
                         <option value="fazer">Não Iniciada</option>
                         <option value="andamento">Em Execução</option>
                         <option value="aprovacao">Aguardando Validação</option>
                         <option value="concluido" id="opt-concluido" style="display:none;">Concluída</option>
                     </select>
-                </div> 
+                </div>
+                
+                <div class="form-group" id="gestor-equipe-panel">
+                    <label style="color: #000;">Equipe Alocada (Gestão)</label>
+                    <div id="edit-responsaveis-container"></div>
+                    <button onclick="addResponsavelField('edit-responsaveis-container')" class="btn-secondary" id="btn-add-edit-resp" style="margin-top: 5px; padding: 5px 10px; font-size: 11px;">➕ Adicionar Outro Envolvido (Clonar Demanda)</button>
+                </div>
+
             </div>
-            <div class="history-section">
-                <label>Linha do Tempo / Reports</label>
-                <div id="modalHistorico" class="history-box"></div>
-                <textarea id="newReport" rows="2" placeholder="Adicionar reporte..."></textarea>
-            </div>
-            <div class="modal-footer">
-                <button onclick="saveModalChanges()" class="btn-primary">SALVAR ATUALIZAÇÃO</button>
-                <button onclick="duplicarTask()" id="btn-duplicar-task" class="btn-secondary">DUPLICAR TAREFA</button>
-                <button onclick="deleteTask()" id="btn-delete-task" class="btn-danger">EXCLUIR DEMANDA</button>
+
+            <div class="modal-footer" id="modal-action-footer" style="display: none; margin-top: 15px;">
+                <button onclick="saveModalChanges()" class="btn-primary" style="flex: 2;">SALVAR E FECHAR</button>
+                <button onclick="duplicarTask()" id="btn-duplicar-task" class="btn-secondary" style="flex: 1;">CLONAR</button>
+                <button onclick="deleteTask()" id="btn-delete-task" class="btn-danger" style="flex: 1;">EXCLUIR</button>
             </div>
         </div>
     </div>
