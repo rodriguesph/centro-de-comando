@@ -13,7 +13,7 @@ let managedProjects = [];
 let biChartProgress = null;
 let biChartTeam = null;
 let biSelectedUsers = []; 
-let biSelectedStatuses = []; // NOVO: Rastreia os cliques no gráfico de rosca (Status)
+let biSelectedStatuses = []; 
 
 // ==========================================================================
 // MOTOR LÓGICO DE STATUS EM TEMPO REAL
@@ -131,7 +131,7 @@ function loadDataTasks() {
 }
 
 // ==========================================================================
-// 3. ADMINISTRAÇÃO AVANÇADA
+// 3. ADMINISTRAÇÃO AVANÇADA (COM CORREÇÃO ESTÉTICA DA LISTA)
 // ==========================================================================
 function renderAdminPanel() {
     if(currentUserRole !== 'super-admin') return;
@@ -156,6 +156,7 @@ function renderAdminPanel() {
         </label>
     `).join('');
 
+    // REPOSIÇÃO DO DESIGN DA LISTA QUE FOI PERDIDO
     let htmlAreas = '';
     allCombinedAreas.forEach(a => {
         const formalData = allAreasData.find(doc => doc.id === a);
@@ -166,14 +167,20 @@ function renderAdminPanel() {
             }).join(', ') : 'Nenhum';
             
             htmlAreas += `
-            <div style="padding: 12px 15px; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; background: #fff;">
-                <div><strong style="font-size: 14px; color: #0f172a;">${a}</strong><br><span style="color:#64748b; font-size:10px; font-weight:700;">GESTORES: <span style="font-weight:500; color:#334155;">${gNomes.toUpperCase()}</span></span></div>
-                <button onclick="deletarArea('${a}')" style="background: #fff5f5; border: 1px solid #fc8181; color: #c53030; padding: 6px 12px; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer;">EXCLUIR</button>
+            <div style="padding: 12px 15px; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; background: #fff;" onmouseover="this.style.borderColor='#cbd5e1'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.05)';" onmouseout="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none';">
+                <div>
+                    <strong style="font-size: 14px; color: #0f172a;">${a}</strong><br>
+                    <span style="color:#64748b; font-size:10px; font-weight:700; letter-spacing: 0.5px;">GESTORES: <span style="font-weight:500; color:#334155;">${gNomes.toUpperCase()}</span></span>
+                </div>
+                <button onclick="deletarArea('${a}')" style="background: #fff5f5; border: 1px solid #fc8181; color: #c53030; padding: 6px 12px; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='#fed7d7'" onmouseout="this.style.background='#fff5f5'">EXCLUIR</button>
             </div>`;
         } else {
             htmlAreas += `
             <div style="padding: 12px 15px; border: 1px dashed #f59e0b; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; background: #fffbeb;">
-                <div><strong style="font-size: 14px; color: #92400e;">${a}</strong><br><span style="color:#d97706; font-size:10px; font-weight:bold;">[ FANTASMA ]</span></div>
+                <div>
+                    <strong style="font-size: 14px; color: #92400e;">${a}</strong><br>
+                    <span style="color:#d97706; font-size:10px; font-weight:bold;">[ FANTASMA - SELECIONE NO MENU ACIMA E SALVE ]</span>
+                </div>
             </div>`;
         }
     });
@@ -184,7 +191,11 @@ function renderAdminPanel() {
     
     let htmlProjs = '';
     Object.keys(projs).sort((a, b) => a.localeCompare(b)).forEach(p => {
-        htmlProjs += `<div onclick="prepararEdicaoProjeto('${p}', '${projs[p]}')" style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center;"><strong style="font-size: 13px;">${p}</strong><span class="status-pill status-fazer" style="font-size: 9px;">${projs[p]}</span></div>`;
+        htmlProjs += `
+            <div onclick="prepararEdicaoProjeto('${p}', '${projs[p]}')" style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">
+                <strong style="font-size: 13px;">${p}</strong>
+                <span class="status-pill status-fazer" style="font-size: 9px;">${projs[p]}</span>
+            </div>`;
     });
     document.getElementById('admin-projects-list').innerHTML = htmlProjs;
     document.getElementById('adminProjectNewArea').innerHTML = '<option value="">Deixar Sem Área</option>' + allCombinedAreas.map(a => `<option value="${a}">${a}</option>`).join('');
@@ -225,6 +236,7 @@ function prepararEdicaoProjeto(projName, currArea) {
     document.getElementById('adminProjectNewArea').value = currArea !== 'Sem Área' ? currArea : '';
     document.getElementById('admin-edit-project-form').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
+
 function cancelarEdicaoProjetoAdmin() { document.getElementById('admin-edit-project-form').style.display = 'none'; }
 
 async function refatorarProjetoCascata() {
@@ -525,7 +537,7 @@ function renderBoard(filteredTasks) {
     board.innerHTML = html;
 }
 
-// REVELAÇÃO PROGRESSIVA
+// REVELAÇÃO PROGRESSIVA NO MODAL
 function revealInteractionPanel() {
     document.getElementById('btn-interact').style.display = 'none';
     document.getElementById('interaction-panel').style.display = 'block';
@@ -538,7 +550,6 @@ function abrirModal(id) {
     const t = allTasks.find(x => x.id === id);
     document.getElementById('taskModal').classList.add('active');
     
-    // Reseta a visão progressiva
     document.getElementById('btn-interact').style.display = 'block';
     document.getElementById('interaction-panel').style.display = 'none';
     document.getElementById('modal-action-footer').style.display = 'none';
@@ -569,7 +580,6 @@ function abrirModal(id) {
     containerResps.innerHTML = ''; 
     if(t.resps) { t.resps.forEach(r => addResponsavelField('edit-responsaveis-container', r.email, r.papel)); }
     
-    // Esconde o painel de equipe se não for gestor
     document.getElementById('gestor-equipe-panel').style.display = isGestorPleno ? 'block' : 'none';
     document.getElementById('btn-add-edit-resp').style.display = isGestorPleno ? 'inline-block' : 'none';
     document.querySelectorAll('#edit-responsaveis-container select').forEach(sel => sel.disabled = !isGestorPleno);
@@ -578,8 +588,20 @@ function abrirModal(id) {
     document.getElementById('btn-delete-task').style.display = isGestorPleno ? 'inline-block' : 'none';
     document.getElementById('btn-duplicar-task').style.display = isGestorPleno ? 'inline-block' : 'none';
     
+    // O TRADUTOR DE NOMES NO HISTÓRICO
     const hist = document.getElementById('modalHistorico');
-    hist.innerHTML = (t.historico && t.historico.length > 0) ? t.historico.map(h => `<div class="history-item"><strong>${h.autor.split('@')[0]}</strong> <small>${h.data}</small><br>${h.texto}</div>`).join('') : "<em>Sem reportes.</em>";
+    hist.innerHTML = (t.historico && t.historico.length > 0) ? t.historico.map(h => {
+        let autorNome = h.autor;
+        let isSystem = h.autor === "SISTEMA";
+        if (!isSystem && autorNome.includes('@')) {
+            const u = allUsers.find(user => user.email === autorNome);
+            autorNome = u ? u.nome : autorNome.split('@')[0];
+        }
+        return `<div class="history-item ${isSystem ? 'history-system' : ''}">
+                    <div class="history-header"><span class="history-author">${autorNome}</span><span class="history-date">${h.data}</span></div>
+                    <div class="history-body">${h.texto}</div>
+                </div>`;
+    }).join('') : "<em style='color:#94a3b8; font-size: 12px; display: block; text-align: center; padding: 10px 0;'>Nenhuma interação registrada.</em>";
 }
 
 function closeModal() { document.getElementById('taskModal').classList.remove('active'); }
@@ -731,7 +753,6 @@ function renderNativeBI() {
     const selectedAreas = Array.from(document.querySelectorAll('.bi-area-check:checked')).map(cb => cb.value);
     const masterAreaCheck = document.getElementById('check-all-area');
     
-    // 1. BASE DE TAREFAS (Macro Filtro de Área e Projeto)
     let baseTasks = currentUserRole === 'super-admin' ? allTasks : allTasks.filter(t => managedAreas.includes(t.area) || managedProjects.includes(t.project));
     if (!(masterAreaCheck && masterAreaCheck.checked)) { baseTasks = baseTasks.filter(t => selectedAreas.includes(t.area || 'Sem Área')); }
 
@@ -739,11 +760,8 @@ function renderNativeBI() {
     else if (checkboxes.length > 0) { btnText.innerText = `${checkboxes.length} PROJETO(S) ▾`; baseTasks = baseTasks.filter(t => checkboxes.includes(t.project)); } 
     else { btnText.innerText = "NENHUM PROJETO ▾"; baseTasks = []; }
 
-    // 2. CONSTRUÇÃO DO GRÁFICO DE BARRAS (EQUIPE)
-    // O gráfico de barras usa a baseTasks (ignorando se algum status foi clicado)
     let teamTasks = baseTasks;
     if (biSelectedStatuses.length > 0) {
-        // Se clicar no status, o gráfico de time também se filtra? Melhor sim, cruzamento bidirecional.
         teamTasks = baseTasks.filter(t => biSelectedStatuses.includes(getCalculatedStatus(t).id));
     }
 
@@ -776,7 +794,6 @@ function renderNativeBI() {
         } 
     });
 
-    // 3. CONSTRUÇÃO DO GRÁFICO DE ROSCA (STATUS CROSS-FILTER)
     let pieTasks = baseTasks;
     if (biSelectedUsers.length > 0) {
         pieTasks = baseTasks.filter(t => {
@@ -796,7 +813,7 @@ function renderNativeBI() {
 
     const pieColorsFinal = pieColorsBase.map((c, i) => {
         if(biSelectedStatuses.length === 0) return c;
-        return biSelectedStatuses.includes(pieIds[i]) ? c : '#e2e8f0'; // Esmaece os não clicados
+        return biSelectedStatuses.includes(pieIds[i]) ? c : '#e2e8f0'; 
     });
 
     if(biChartProgress) biChartProgress.destroy();
@@ -816,7 +833,6 @@ function renderNativeBI() {
         } 
     });
 
-    // 4. APLICAÇÃO DOS MICRO-FILTROS (Cruzamento Total)
     currentFilteredTasks = baseTasks;
     if (biSelectedUsers.length > 0) {
         currentFilteredTasks = currentFilteredTasks.filter(t => {
@@ -829,7 +845,6 @@ function renderNativeBI() {
         currentFilteredTasks = currentFilteredTasks.filter(t => biSelectedStatuses.includes(getCalculatedStatus(t).id));
     }
 
-    // 5. CÁLCULO DOS KPIS DE TOPO
     let kpis = { total: currentFilteredTasks.length, nao_iniciada: 0, atrasada: 0, execucao: 0, aguardando: 0, critica: 0, concluidas: 0 };
     currentFilteredTasks.forEach(t => {
         const cStatus = getCalculatedStatus(t);
