@@ -55,14 +55,15 @@ function updateNavVisibility() {
     const isGestorProjeto = managedProjects.length > 0;
     const temPoder = isSuperAdmin || isGestorArea || isGestorProjeto;
     
-    document.getElementById('btn-nav-bi').style.display = temPoder ? 'inline-block' : 'none';
+    // O BI AGORA É ABERTO PARA TODOS OS USUÁRIOS
+    document.getElementById('btn-nav-bi').style.display = 'inline-block'; 
     document.getElementById('btn-nav-novo').style.display = temPoder ? 'inline-block' : 'none';
     document.getElementById('btn-nav-usuarios').style.display = isSuperAdmin ? 'inline-block' : 'none';
     document.getElementById('btn-nav-admin').style.display = isSuperAdmin ? 'inline-block' : 'none';
     
     const currentActive = document.querySelector('.content-section.active')?.id;
-    if (!temPoder && (currentActive === 'sec-dashboard-bi' || currentActive === 'sec-novo-projeto')) {
-        showSection('acompanhamento');
+    if (!temPoder && (currentActive === 'sec-novo-projeto' || currentActive === 'sec-admin' || currentActive === 'sec-usuarios')) {
+        showSection('dashboard-bi'); // Se não tem poder e tenta burlar, volta pro BI
     }
 }
 
@@ -131,7 +132,7 @@ function loadDataTasks() {
 }
 
 // ==========================================================================
-// 3. ADMINISTRAÇÃO AVANÇADA (COM CORREÇÃO ESTÉTICA DA LISTA)
+// 3. ADMINISTRAÇÃO AVANÇADA
 // ==========================================================================
 function renderAdminPanel() {
     if(currentUserRole !== 'super-admin') return;
@@ -156,7 +157,6 @@ function renderAdminPanel() {
         </label>
     `).join('');
 
-    // REPOSIÇÃO DO DESIGN DA LISTA QUE FOI PERDIDO
     let htmlAreas = '';
     allCombinedAreas.forEach(a => {
         const formalData = allAreasData.find(doc => doc.id === a);
@@ -167,20 +167,14 @@ function renderAdminPanel() {
             }).join(', ') : 'Nenhum';
             
             htmlAreas += `
-            <div style="padding: 12px 15px; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; background: #fff;" onmouseover="this.style.borderColor='#cbd5e1'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.05)';" onmouseout="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none';">
-                <div>
-                    <strong style="font-size: 14px; color: #0f172a;">${a}</strong><br>
-                    <span style="color:#64748b; font-size:10px; font-weight:700; letter-spacing: 0.5px;">GESTORES: <span style="font-weight:500; color:#334155;">${gNomes.toUpperCase()}</span></span>
-                </div>
-                <button onclick="deletarArea('${a}')" style="background: #fff5f5; border: 1px solid #fc8181; color: #c53030; padding: 6px 12px; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='#fed7d7'" onmouseout="this.style.background='#fff5f5'">EXCLUIR</button>
+            <div style="padding: 12px 15px; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; background: #fff;">
+                <div><strong style="font-size: 14px; color: #0f172a;">${a}</strong><br><span style="color:#64748b; font-size:10px; font-weight:700;">GESTORES: <span style="font-weight:500; color:#334155;">${gNomes.toUpperCase()}</span></span></div>
+                <button onclick="deletarArea('${a}')" style="background: #fff5f5; border: 1px solid #fc8181; color: #c53030; padding: 6px 12px; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer;">EXCLUIR</button>
             </div>`;
         } else {
             htmlAreas += `
             <div style="padding: 12px 15px; border: 1px dashed #f59e0b; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; background: #fffbeb;">
-                <div>
-                    <strong style="font-size: 14px; color: #92400e;">${a}</strong><br>
-                    <span style="color:#d97706; font-size:10px; font-weight:bold;">[ FANTASMA - SELECIONE NO MENU ACIMA E SALVE ]</span>
-                </div>
+                <div><strong style="font-size: 14px; color: #92400e;">${a}</strong><br><span style="color:#d97706; font-size:10px; font-weight:bold;">[ FANTASMA ]</span></div>
             </div>`;
         }
     });
@@ -191,11 +185,7 @@ function renderAdminPanel() {
     
     let htmlProjs = '';
     Object.keys(projs).sort((a, b) => a.localeCompare(b)).forEach(p => {
-        htmlProjs += `
-            <div onclick="prepararEdicaoProjeto('${p}', '${projs[p]}')" style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">
-                <strong style="font-size: 13px;">${p}</strong>
-                <span class="status-pill status-fazer" style="font-size: 9px;">${projs[p]}</span>
-            </div>`;
+        htmlProjs += `<div onclick="prepararEdicaoProjeto('${p}', '${projs[p]}')" style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center;"><strong style="font-size: 13px;">${p}</strong><span class="status-pill status-fazer" style="font-size: 9px;">${projs[p]}</span></div>`;
     });
     document.getElementById('admin-projects-list').innerHTML = htmlProjs;
     document.getElementById('adminProjectNewArea').innerHTML = '<option value="">Deixar Sem Área</option>' + allCombinedAreas.map(a => `<option value="${a}">${a}</option>`).join('');
@@ -236,7 +226,6 @@ function prepararEdicaoProjeto(projName, currArea) {
     document.getElementById('adminProjectNewArea').value = currArea !== 'Sem Área' ? currArea : '';
     document.getElementById('admin-edit-project-form').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
-
 function cancelarEdicaoProjetoAdmin() { document.getElementById('admin-edit-project-form').style.display = 'none'; }
 
 async function refatorarProjetoCascata() {
@@ -429,6 +418,7 @@ async function duplicarTask() {
 // ==========================================================================
 function getVisibleTasksBoard() {
     if (currentUserRole === 'super-admin') return allTasks;
+    // Retorna as tarefas onde o usuário é gestor ou está designado como executor
     return allTasks.filter(t => managedAreas.includes(t.area) || managedProjects.includes(t.project) || (t.resps && t.resps.some(r => r.email === currentUserEmail)));
 }
 
@@ -686,7 +676,7 @@ async function saveModalChanges() {
 async function deleteTask() { if(confirm("Excluir definitivamente?")) { await db.collection('tarefas').doc(currentTaskId).delete(); closeModal(); } }
 
 // ==========================================================================
-// 7. BUSINESS INTELLIGENCE AVANÇADO (CROSS-FILTERING TOTAL)
+// 7. BUSINESS INTELLIGENCE AVANÇADO (CROSS-FILTERING HÍBRIDO E TOTAL)
 // ==========================================================================
 function toggleFilterMenu(type) { 
     document.querySelectorAll('.dropdown-content').forEach(el => { if (el.id !== `filter-checkboxes-${type}`) el.classList.remove('show'); });
@@ -697,8 +687,11 @@ function updateBIAreaFilter() {
     const container = document.getElementById('filter-checkboxes-area');
     if(!container) return;
     const checkedBoxes = Array.from(document.querySelectorAll('.bi-area-check:checked')).map(cb => cb.value);
-    const allowedTasks = currentUserRole === 'super-admin' ? allTasks : allTasks.filter(t => managedAreas.includes(t.area) || managedProjects.includes(t.project));
+    
+    // O BI É BASEADO NA VISÃO DO USUÁRIO AGORA (EXECUTORES VÊEM SUAS ÁREAS)
+    const allowedTasks = getVisibleTasksBoard();
     const allAreas = [...new Set(allowedTasks.map(t => t.area || 'Sem Área'))].sort((a, b) => a.localeCompare(b));
+    
     let html = `<label class="checkbox-item"><input type="checkbox" id="check-all-area" onchange="toggleAllAreas(this)" ${checkedBoxes.length === 0 || checkedBoxes.includes('ALL') ? 'checked' : ''}><strong>[ TODAS AS ÁREAS ]</strong></label>`;
     allAreas.forEach(a => {
         const isChecked = checkedBoxes.includes(a) || (checkedBoxes.length === 0 && document.getElementById('check-all-area')?.checked) ? 'checked' : '';
@@ -720,7 +713,8 @@ function updateBIProjectFilter() {
     const masterAreaCheck = document.getElementById('check-all-area');
     const selectedAreas = Array.from(document.querySelectorAll('.bi-area-check:checked')).map(cb => cb.value);
     const btnAreaText = document.getElementById('btn-filter-area');
-    let allowedTasks = currentUserRole === 'super-admin' ? allTasks : allTasks.filter(t => managedAreas.includes(t.area) || managedProjects.includes(t.project));
+    
+    let allowedTasks = getVisibleTasksBoard();
     
     if (masterAreaCheck && masterAreaCheck.checked) { btnAreaText.innerText = "[ TODAS AS ÁREAS ] ▾"; } 
     else if (selectedAreas.length > 0) { btnAreaText.innerText = `${selectedAreas.length} ÁREA(S) ▾`; allowedTasks = allowedTasks.filter(t => selectedAreas.includes(t.area || 'Sem Área')); } 
@@ -753,13 +747,20 @@ function renderNativeBI() {
     const selectedAreas = Array.from(document.querySelectorAll('.bi-area-check:checked')).map(cb => cb.value);
     const masterAreaCheck = document.getElementById('check-all-area');
     
-    let baseTasks = currentUserRole === 'super-admin' ? allTasks : allTasks.filter(t => managedAreas.includes(t.area) || managedProjects.includes(t.project));
+    // MICRO VISÃO: TAREFAS QUE O USUÁRIO TEM ACESSO
+    let baseTasks = getVisibleTasksBoard();
     if (!(masterAreaCheck && masterAreaCheck.checked)) { baseTasks = baseTasks.filter(t => selectedAreas.includes(t.area || 'Sem Área')); }
 
     if (masterCheck && masterCheck.checked) { btnText.innerText = "[ TODOS OS PROJETOS ] ▾"; } 
     else if (checkboxes.length > 0) { btnText.innerText = `${checkboxes.length} PROJETO(S) ▾`; baseTasks = baseTasks.filter(t => checkboxes.includes(t.project)); } 
     else { btnText.innerText = "NENHUM PROJETO ▾"; baseTasks = []; }
 
+    // MACRO VISÃO: TODAS AS TAREFAS DOS PROJETOS SELECIONADOS (CÁLCULO DE INFLUÊNCIA)
+    let totalMacroTasks = allTasks;
+    if (!(masterAreaCheck && masterAreaCheck.checked)) { totalMacroTasks = totalMacroTasks.filter(t => selectedAreas.includes(t.area || 'Sem Área')); }
+    if (checkboxes.length > 0 && !(masterCheck && masterCheck.checked)) { totalMacroTasks = totalMacroTasks.filter(t => checkboxes.includes(t.project)); }
+
+    // GRÁFICO DE BARRAS
     let teamTasks = baseTasks;
     if (biSelectedStatuses.length > 0) {
         teamTasks = baseTasks.filter(t => biSelectedStatuses.includes(getCalculatedStatus(t).id));
@@ -794,6 +795,7 @@ function renderNativeBI() {
         } 
     });
 
+    // GRÁFICO DE ROSCA
     let pieTasks = baseTasks;
     if (biSelectedUsers.length > 0) {
         pieTasks = baseTasks.filter(t => {
@@ -863,10 +865,11 @@ function renderNativeBI() {
     document.getElementById('bi-kpi-aguardando').innerText = kpis.aguardando;
     document.getElementById('bi-kpi-critica').innerText = kpis.critica;
 
+    // CÁLCULO DE INFLUÊNCIA COM MACRO-VISÃO (Total do Projeto)
     let influencePerc = 100;
-    if (baseTasks.length > 0 && (biSelectedUsers.length > 0 || biSelectedStatuses.length > 0)) { 
-        influencePerc = Math.round((currentFilteredTasks.length / baseTasks.length) * 100); 
-    } else if (baseTasks.length === 0) { influencePerc = 0; }
+    if (totalMacroTasks.length > 0) { 
+        influencePerc = Math.round((currentFilteredTasks.length / totalMacroTasks.length) * 100); 
+    } else { influencePerc = 0; }
     document.getElementById('bi-kpi-influencia').innerText = influencePerc + '%';
 
     drawExecutiveGantt(currentFilteredTasks);
