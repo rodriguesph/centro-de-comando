@@ -517,6 +517,39 @@
         </div>
     </div>
 
+    <!-- ===================== EDITAR MEMBRO (admin) ===================== -->
+    <div id="editarMembroModal" class="modal" role="dialog" aria-modal="true">
+        <div class="modal-content shadow" style="max-width: 520px;">
+            <div class="modal-header"><h3>Editar Membro</h3><button onclick="fecharEdicaoMembro()" class="close-btn" aria-label="Fechar">&times;</button></div>
+            <input type="hidden" id="editMembroId">
+            <div class="form-group">
+                <label>Nome Completo</label>
+                <input type="text" id="editMembroNome">
+            </div>
+            <div class="form-group">
+                <label>E-mail Google <span style="font-weight:400; color:#64748b;">(somente leitura — chave de login)</span></label>
+                <input type="email" id="editMembroEmail" disabled class="readonly-field">
+            </div>
+            <div class="form-group">
+                <label>WhatsApp <span style="font-weight:400; color:#64748b;">(formato +55 11 99999-9999)</span></label>
+                <input type="tel" id="editMembroTelefone" placeholder="+5511999999999">
+                <p style="font-size: 11px; color: #64748b; margin-top: 6px;">Sem telefone, a pessoa só recebe notificações por e-mail.</p>
+            </div>
+            <div class="form-group">
+                <label>Papel no Sistema</label>
+                <div class="priority-toggle">
+                    <label><input type="radio" name="editMembroPapel" value="membro"><span class="priority-pill prio-baixa">Membro</span></label>
+                    <label><input type="radio" name="editMembroPapel" value="super-admin"><span class="priority-pill prio-alta">Super-admin</span></label>
+                </div>
+                <p style="font-size: 11px; color: #64748b; margin-top: 6px;">Super-admin tem acesso total: criar áreas, gerenciar equipe, editar qualquer demanda. Use com critério.</p>
+            </div>
+            <div class="modal-footer" style="margin-top: 18px;">
+                <button onclick="fecharEdicaoMembro()" class="btn-secondary" style="flex:1;">CANCELAR</button>
+                <button onclick="salvarEdicaoMembro()" class="btn-primary" style="flex:2;">SALVAR ALTERAÇÕES</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ===================== DRAWER VETOR IA ===================== -->
     <aside id="vetorIADrawer" class="ia-drawer" aria-label="Vetor IA">
         <header class="ia-header">

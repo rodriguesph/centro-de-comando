@@ -480,11 +480,32 @@ async function cadastrarUsuario() {
 function renderUsers() {
     const board = document.getElementById('lista-usuarios-board');
     if (!board) return;
-    let html = `<div class="table-container shadow"><table><thead><tr><th>Nome</th><th>E-mail</th><th>WhatsApp</th><th style="text-align:right">Ação</th></tr></thead><tbody>`;
+    const isSuperAdmin = currentUserRole === 'super-admin';
+
+    let html = `<div class="table-container shadow"><table><thead><tr>
+        <th>Nome</th><th>E-mail</th><th>WhatsApp</th><th>Papel</th><th style="text-align:right">Ações</th>
+    </tr></thead><tbody>`;
     allUsers.forEach(u => {
-        const tel = u.telefone ? `<span style="font-family:monospace;">${escapeHtml(u.telefone)}</span>` : '<span style="color:#94a3b8; font-size:11px;">não cadastrado</span>';
-        html += `<tr><td class="bold">${escapeHtml(u.nome)}</td><td>${escapeHtml(u.email)}</td><td>${tel}</td><td style="text-align:right">
-        ${u.email !== currentUserEmail ? `<button onclick="removerUsuario('${u.id}')" class="btn-danger">REMOVER</button>` : '<small>(Você)</small>'}</td></tr>`;
+        const tel = u.telefone
+            ? `<span style="font-family:monospace; font-size:12px;">${escapeHtml(u.telefone)}</span>`
+            : `<span style="background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:100px; font-size:10px; font-weight:700;">SEM WHATSAPP</span>`;
+        const papelBadge = u.papel === 'super-admin'
+            ? `<span class="priority-pill prio-alta" style="opacity:1;">Super-admin</span>`
+            : `<span class="priority-pill prio-baixa" style="opacity:1;">Membro</span>`;
+        const isMe = u.email === currentUserEmail;
+        let acoes = '';
+        if (isSuperAdmin) {
+            acoes += `<button onclick="abrirEdicaoMembro('${u.id}')" class="btn-secondary" style="margin-right:6px;">EDITAR</button>`;
+            if (!isMe) acoes += `<button onclick="removerUsuario('${u.id}')" class="btn-danger">REMOVER</button>`;
+            else acoes += '<small>(Você)</small>';
+        } else if (!isMe) {
+            acoes = '<small style="color:#94a3b8;">—</small>';
+        } else {
+            acoes = '<small>(Você)</small>';
+        }
+        html += `<tr><td class="bold">${escapeHtml(u.nome)}</td><td>${escapeHtml(u.email)}</td>
+            <td>${tel}</td><td>${papelBadge}</td>
+            <td style="text-align:right">${acoes}</td></tr>`;
     });
     board.innerHTML = html + `</tbody></table></div>`;
 }
@@ -497,6 +518,55 @@ async function removerUsuario(id) {
         toast('Acesso revogado.', 'success');
     } catch (e) {
         toast('Falha ao revogar acesso.', 'error');
+    }
+}
+
+// ==========================================================================
+// EDIÇÃO DE MEMBRO PELO ADMIN — preencher WhatsApp, mudar papel/nome
+// ==========================================================================
+function abrirEdicaoMembro(id) {
+    if (currentUserRole !== 'super-admin') return;
+    const u = allUsers.find(x => x.id === id);
+    if (!u) return;
+    document.getElementById('editMembroId').value = u.id;
+    document.getElementById('editMembroNome').value = u.nome || '';
+    document.getElementById('editMembroEmail').value = u.email || '';
+    document.getElementById('editMembroTelefone').value = u.telefone || '';
+    const papel = u.papel || 'membro';
+    document.querySelectorAll('input[name="editMembroPapel"]').forEach(r => {
+        r.checked = (r.value === papel);
+    });
+    document.getElementById('editarMembroModal').classList.add('active');
+}
+
+function fecharEdicaoMembro() {
+    document.getElementById('editarMembroModal').classList.remove('active');
+}
+
+async function salvarEdicaoMembro() {
+    const id = document.getElementById('editMembroId').value;
+    const nome = document.getElementById('editMembroNome').value.trim();
+    const tel = normalizarTelefone(document.getElementById('editMembroTelefone').value.trim());
+    const papel = document.querySelector('input[name="editMembroPapel"]:checked')?.value || 'membro';
+    if (!nome) return toast('Nome não pode ficar vazio.', 'warning');
+
+    // Proteção contra rebaixar a si mesmo (perderia acesso ao admin)
+    const u = allUsers.find(x => x.id === id);
+    if (u && u.email === currentUserEmail && papel !== 'super-admin') {
+        const confirmar = await vetorConfirm(
+            'Atenção: você está rebaixando sua própria conta. Vai perder acesso ao painel Admin imediatamente. Confirma?',
+            'Rebaixar a si mesmo'
+        );
+        if (!confirmar) return;
+    }
+
+    try {
+        await db.collection('usuarios').doc(id).update({ nome, telefone: tel, papel });
+        toast('Membro atualizado.', 'success');
+        fecharEdicaoMembro();
+    } catch (e) {
+        console.error(e);
+        toast('Falha ao salvar. Verifique suas permissões.', 'error');
     }
 }
 
