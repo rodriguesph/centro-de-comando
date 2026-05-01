@@ -106,12 +106,13 @@ service cloud.firestore {
       request.resource.data.status in ['fazer','andamento','aprovacao','concluido'];
 
       // Atualização: gestores podem alterar qualquer campo; executores só status e historico.
+      // Campos de arquivamento (arquivada, arquivada_em, arquivada_por) são livres para gestor.
       allow update: if isCredentialed() && (
         isSuperAdmin() ||
         (resource.data.area != null && isGestorArea(resource.data.area)) ||
         (
           isExecutorTask(resource.data) &&
-          // Executor só pode mudar status (e adicionar histórico). NUNCA marcar como concluído.
+          // Executor só pode mudar status (e adicionar histórico). NUNCA marcar como concluído nem arquivar.
           request.resource.data.diff(resource.data).affectedKeys()
               .hasOnly(['status','historico']) &&
           request.resource.data.status in ['fazer','andamento','aprovacao']

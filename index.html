@@ -79,6 +79,7 @@
                 <button onclick="showSection('acompanhamento')" id="btn-nav-op" class="nav-link">OPERACIONAL</button>
                 <button onclick="showSection('kanban')" id="btn-nav-kanban" class="nav-link">KANBAN</button>
                 <button onclick="showSection('busca')" id="btn-nav-busca" class="nav-link">BUSCA</button>
+                <button onclick="showSection('arquivo')" id="btn-nav-arquivo" class="nav-link" style="display:none;">ARQUIVO</button>
                 <button onclick="showSection('usuarios')" id="btn-nav-usuarios" class="nav-link" style="display:none;">EQUIPE</button>
                 <button onclick="showSection('admin')" id="btn-nav-admin" class="nav-link" style="display:none; color: #dc3545;">ADMIN</button>
                 <div class="nav-actions">
@@ -295,6 +296,16 @@
                 <div id="buscaResultados" class="busca-resultados"></div>
             </section>
 
+            <!-- ====== ABA ARQUIVO ====== -->
+            <section id="sec-arquivo" class="content-section">
+                <div class="section-header">
+                    <h2>Arquivo</h2>
+                    <div class="hoje-date">Tarefas e projetos arquivados</div>
+                </div>
+                <p class="kanban-hint">Aqui ficam tarefas concluídas há mais de 30 dias e projetos que você arquivou manualmente. Continuam acessíveis ao Vetor IA quando você fizer perguntas sobre o passado. Clique em "Desarquivar" para trazer de volta às visões principais.</p>
+                <div id="arquivoLista"></div>
+            </section>
+
             <!-- ====== ABA EQUIPE ====== -->
             <section id="sec-usuarios" class="content-section">
                 <div class="form-container shadow">
@@ -344,6 +355,17 @@
                             <div style="display: flex; gap: 10px; margin-top: 15px;">
                                 <button onclick="refatorarProjetoCascata()" class="btn-danger" style="flex: 2;">APLICAR EM CASCATA</button>
                                 <button onclick="cancelarEdicaoProjetoAdmin()" class="btn-secondary" style="flex: 1;">CANCELAR</button>
+                            </div>
+                            <hr style="margin: 18px 0; border: 0; border-top: 1px solid #fc8181;">
+                            <div style="background:#fffbeb; border:1px solid #fcd34d; padding:12px; border-radius:6px;">
+                                <p style="font-size:11px; color:#92400e; margin-bottom:10px;">
+                                    <strong>ARQUIVAR PROJETO INTEIRO</strong><br>
+                                    Marca todas as tarefas deste projeto como arquivadas. O projeto some das visões padrão (Hoje, BI, Operacional, Kanban) e fica disponível na aba <strong>Arquivo</strong>. Pode ser desarquivado depois.
+                                </p>
+                                <div style="display: flex; gap: 10px;">
+                                    <button onclick="arquivarProjetoCascata(true)" class="btn-secondary" style="flex: 1; border-color:#f59e0b; color:#92400e;">📦 ARQUIVAR PROJETO</button>
+                                    <button onclick="arquivarProjetoCascata(false)" class="btn-secondary" style="flex: 1;">↺ DESARQUIVAR PROJETO</button>
+                                </div>
                             </div>
                         </div>
                     </div>

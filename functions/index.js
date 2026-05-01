@@ -451,7 +451,44 @@ exports.sendNotification = onCall(
 );
 
 // ============================================================================
-// 6) dailyBriefing — job agendado diário (7h Brasília)
+// 6.a) autoArchiveTasks — agendado: arquiva tarefas concluídas há +30 dias
+// ============================================================================
+const AUTO_ARCHIVE_DAYS = 30;
+exports.autoArchiveTasks = onSchedule(
+  {
+    schedule: '0 3 * * *', // 03:00 todo dia
+    timeZone: 'America/Sao_Paulo',
+    region: REGION
+  },
+  async () => {
+    const cutoffMs = Date.now() - (AUTO_ARCHIVE_DAYS * 86400000);
+    const cutoffDate = new Date(cutoffMs).toISOString().slice(0, 10); // YYYY-MM-DD
+
+    // Busca tarefas concluídas, ainda não arquivadas, com data_fim antes do cutoff
+    const snap = await db.collection('tarefas')
+      .where('status', '==', 'concluido')
+      .where('data_fim', '<=', cutoffDate)
+      .get();
+
+    let arquivadas = 0;
+    const batch = db.batch();
+    snap.docs.forEach(d => {
+      const t = d.data();
+      if (t.arquivada) return;
+      batch.update(d.ref, {
+        arquivada: true,
+        arquivada_em: admin.firestore.FieldValue.serverTimestamp(),
+        arquivada_por: 'AUTO'
+      });
+      arquivadas++;
+    });
+    if (arquivadas > 0) await batch.commit();
+    console.log(`[autoArchiveTasks] ${arquivadas} tarefa(s) arquivadas (cutoff ${cutoffDate}).`);
+  }
+);
+
+// ============================================================================
+// 7) dailyBriefing — job agendado diário (7h Brasília)
 // ============================================================================
 exports.dailyBriefing = onSchedule(
   {

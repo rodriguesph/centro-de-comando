@@ -102,6 +102,7 @@ function showSection(sec) {
         'acompanhamento': 'btn-nav-op',
         'kanban': 'btn-nav-kanban',
         'busca': 'btn-nav-busca',
+        'arquivo': 'btn-nav-arquivo',
         'usuarios': 'btn-nav-usuarios',
         'admin': 'btn-nav-admin',
         'novo-projeto': 'btn-nav-novo'
@@ -116,6 +117,7 @@ function showSection(sec) {
     if (sec === 'usuarios') renderUsers();
     if (sec === 'admin') renderAdminPanel();
     if (sec === 'busca') executarBusca();
+    if (sec === 'arquivo') renderArquivo();
 }
 
 function updateNavVisibility() {
@@ -127,6 +129,7 @@ function updateNavVisibility() {
     document.getElementById('btn-nav-bi').style.display = 'inline-block';
     document.getElementById('btn-nav-novo').style.display = temPoder ? 'inline-block' : 'none';
     document.getElementById('btn-nav-voz').style.display = temPoder ? 'inline-flex' : 'none';
+    document.getElementById('btn-nav-arquivo').style.display = temPoder ? 'inline-block' : 'none';
     document.getElementById('btn-nav-usuarios').style.display = isSuperAdmin ? 'inline-block' : 'none';
     document.getElementById('btn-nav-admin').style.display = isSuperAdmin ? 'inline-block' : 'none';
 
@@ -215,6 +218,8 @@ function loadDataTasks() {
         renderHoje();
         if (document.getElementById('sec-kanban').classList.contains('active')) renderKanban();
         if (document.getElementById('sec-busca').classList.contains('active')) executarBusca();
+        if (document.getElementById('sec-arquivo').classList.contains('active')) renderArquivo();
+        autoArchiveExpired(); // fallback enquanto Cloud Function não está deployada
     }, err => {
         console.error('Erro snapshot tarefas:', err);
         toast('Falha ao sincronizar tarefas.', 'error');
@@ -695,9 +700,20 @@ async function duplicarTask() {
 // ==========================================================================
 // 7. VISÃO OPERACIONAL E MODAL
 // ==========================================================================
+// Por padrão, tarefas arquivadas são removidas das visões.
+// Para acessá-las, use getAllTasksIncludingArchived().
 function getVisibleTasksBoard() {
-    if (currentUserRole === 'super-admin') return allTasks;
-    return allTasks.filter(t => managedAreas.includes(t.area) || managedProjects.includes(t.project) || (t.resps && t.resps.some(r => r.email === currentUserEmail)));
+    let base;
+    if (currentUserRole === 'super-admin') base = allTasks;
+    else base = allTasks.filter(t => managedAreas.includes(t.area) || managedProjects.includes(t.project) || (t.resps && t.resps.some(r => r.email === currentUserEmail)));
+    return base.filter(t => !t.arquivada);
+}
+
+function getArchivedTasks() {
+    let base;
+    if (currentUserRole === 'super-admin') base = allTasks;
+    else base = allTasks.filter(t => managedAreas.includes(t.area) || managedProjects.includes(t.project) || (t.resps && t.resps.some(r => r.email === currentUserEmail)));
+    return base.filter(t => t.arquivada === true);
 }
 
 function updateProjectAndAreaLists() {
@@ -1723,20 +1739,26 @@ async function iaEnviar() {
 }
 
 function construirContextoIA() {
+    // Tarefas ativas: visão padrão (sem arquivadas)
     const tasksVis = getVisibleTasksBoard();
+    // Arquivadas vão num campo separado para o Claude saber distinguir.
+    const arquivadas = getArchivedTasks();
+    const mapTask = t => ({
+        id: t.id, area: t.area, projeto: t.project, titulo: t.text,
+        status: t.status, statusCalc: getCalculatedStatus(t).id,
+        prioridade: t.prioridade || 'media',
+        data_inicio: t.data_inicio, data_fim: t.data_fim,
+        arquivada: !!t.arquivada,
+        responsaveis: (t.resps || []).map(r => ({ nome: r.nome, email: r.email, papel: r.papel }))
+    });
     return {
         currentUserEmail,
         currentUserNome,
         currentUserRole,
         areas: allAreasData.map(a => ({ id: a.id, gestores: a.gestores })),
         usuarios: allUsers.map(u => ({ nome: u.nome, email: u.email, papel: u.papel })),
-        tarefas: tasksVis.map(t => ({
-            id: t.id, area: t.area, projeto: t.project, titulo: t.text,
-            status: t.status, statusCalc: getCalculatedStatus(t).id,
-            prioridade: t.prioridade || 'media',
-            data_inicio: t.data_inicio, data_fim: t.data_fim,
-            responsaveis: (t.resps || []).map(r => ({ nome: r.nome, email: r.email, papel: r.papel }))
-        }))
+        tarefas: tasksVis.map(mapTask),
+        tarefas_arquivadas: arquivadas.map(mapTask) // Claude pode citar quando perguntado sobre histórico
     };
 }
 
@@ -1826,5 +1848,133 @@ async function cobrarComIA() {
         toast('Cobrança enviada.', 'success');
     } catch (e) {
         toast('Falha ao enviar cobrança.', 'error');
+    }
+}
+
+// ==========================================================================
+// 14. ARQUIVAMENTO — manual e auto (fallback client-side)
+// ==========================================================================
+const AUTO_ARCHIVE_DAYS = 30;
+
+// Arquiva ou desarquiva um projeto inteiro (em lote).
+async function arquivarProjetoCascata(arquivar) {
+    const projName = document.getElementById('adminEditProjTarget').innerText;
+    if (!projName) return;
+
+    const acao = arquivar ? 'arquivar' : 'desarquivar';
+    const ok = await vetorConfirm(
+        `Você vai ${acao} TODAS as tarefas do projeto "${projName}". Confirma?`,
+        `${acao.charAt(0).toUpperCase() + acao.slice(1)} projeto`
+    );
+    if (!ok) return;
+
+    try {
+        const batch = db.batch();
+        const snapshot = await db.collection('tarefas').where('project', '==', projName).get();
+        if (snapshot.empty) { toast('Nenhuma tarefa encontrada.', 'warning'); return; }
+        snapshot.forEach(doc => {
+            batch.update(doc.ref, {
+                arquivada: arquivar,
+                arquivada_em: arquivar ? firebase.firestore.FieldValue.serverTimestamp() : firebase.firestore.FieldValue.delete()
+            });
+        });
+        await batch.commit();
+        toast(`Projeto ${acao}do em ${snapshot.size} tarefa(s).`, 'success');
+        cancelarEdicaoProjetoAdmin();
+        renderAdminPanel();
+    } catch (e) {
+        console.error(e);
+        toast(`Falha ao ${acao} projeto.`, 'error');
+    }
+}
+
+// Arquiva uma tarefa individual.
+async function arquivarTarefa(taskId, arquivar) {
+    try {
+        await db.collection('tarefas').doc(taskId).update({
+            arquivada: arquivar,
+            arquivada_em: arquivar ? firebase.firestore.FieldValue.serverTimestamp() : firebase.firestore.FieldValue.delete()
+        });
+        toast(arquivar ? 'Tarefa arquivada.' : 'Tarefa desarquivada.', 'success');
+    } catch (e) {
+        toast('Falha ao alterar arquivamento.', 'error');
+    }
+}
+
+// Render da aba Arquivo: agrupa por projeto.
+function renderArquivo() {
+    const cont = document.getElementById('arquivoLista');
+    if (!cont) return;
+    const arquivadas = getArchivedTasks();
+
+    if (arquivadas.length === 0) {
+        cont.innerHTML = '<div class="arquivo-empty">Nenhuma tarefa arquivada. Tarefas concluídas há mais de 30 dias chegam aqui automaticamente.</div>';
+        return;
+    }
+
+    const grouped = {};
+    arquivadas.forEach(t => {
+        const k = t.project || 'Sem Projeto';
+        if (!grouped[k]) grouped[k] = [];
+        grouped[k].push(t);
+    });
+
+    let html = '';
+    Object.keys(grouped).sort((a, b) => a.localeCompare(b)).forEach(projName => {
+        const tasks = grouped[projName];
+        const area = tasks[0].area || 'Sem Área';
+        html += `<div class="arquivo-projeto">
+            <div class="arquivo-projeto-header">
+                <h4>📦 ${escapeHtml(projName)} <small>(${escapeHtml(area)} · ${tasks.length} tarefa${tasks.length > 1 ? 's' : ''})</small></h4>
+            </div>`;
+        tasks.forEach(t => {
+            const respNomes = t.resps && t.resps.length > 0 ? t.resps.map(r => r.nome.split(' ')[0]).join(', ') : '—';
+            const dataConclusao = t.data_fim ? t.data_fim.split('-').reverse().join('/') : '—';
+            const cs = getCalculatedStatus(t);
+            html += `<div class="arquivo-task">
+                <div class="arquivo-task-info">
+                    <strong>${escapeHtml(t.text)}</strong>
+                    <small>Concluída em ${dataConclusao} · Responsáveis: ${escapeHtml(respNomes)} · <span class="status-pill ${cs.class}" style="font-size:9px;">${cs.label}</span></small>
+                </div>
+                <button class="btn-desarquivar" onclick="arquivarTarefa('${t.id}', false)">↺ DESARQUIVAR</button>
+            </div>`;
+        });
+        html += `</div>`;
+    });
+    cont.innerHTML = html;
+}
+
+// Auto-arquivar (fallback client-side enquanto a Cloud Function não está deployada).
+// Roda 1x por sessão de gestor. Marca como arquivada toda tarefa concluída há mais de N dias.
+let autoArchiveRan = false;
+async function autoArchiveExpired() {
+    if (autoArchiveRan) return;
+    if (currentUserRole !== 'super-admin') return; // só super-admin dispara o batch
+    autoArchiveRan = true;
+
+    const cutoff = Date.now() - (AUTO_ARCHIVE_DAYS * 86400000);
+    const candidatas = allTasks.filter(t => {
+        if (t.arquivada) return false;
+        if (t.status !== 'concluido') return false;
+        if (!t.data_fim) return false;
+        const fimMs = new Date(t.data_fim + 'T00:00:00').getTime();
+        return fimMs < cutoff;
+    });
+
+    if (candidatas.length === 0) return;
+
+    try {
+        const batch = db.batch();
+        candidatas.forEach(t => {
+            batch.update(db.collection('tarefas').doc(t.id), {
+                arquivada: true,
+                arquivada_em: firebase.firestore.FieldValue.serverTimestamp(),
+                arquivada_por: 'AUTO'
+            });
+        });
+        await batch.commit();
+        console.log(`[auto-archive] ${candidatas.length} tarefa(s) arquivadas automaticamente.`);
+    } catch (e) {
+        console.warn('[auto-archive] falha:', e);
     }
 }
