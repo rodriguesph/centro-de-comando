@@ -174,7 +174,40 @@ auth.onAuthStateChanged(async user => {
 });
 
 function logout() { auth.signOut(); }
-document.getElementById('login-btn').onclick = () => auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+
+// Detecção: mobile e Safari precisam de signInWithRedirect (popup é bloqueado por storage partitioning).
+function isMobileOrSafari() {
+    const ua = navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+    const isAndroid = /Android/i.test(ua);
+    const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+    return isIOS || isAndroid || isSafari || window.innerWidth < 768;
+}
+
+async function fazerLogin() {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    try {
+        if (isMobileOrSafari()) {
+            await auth.signInWithRedirect(provider);
+        } else {
+            await auth.signInWithPopup(provider);
+        }
+    } catch (e) {
+        console.error('Login popup falhou, tentando redirect:', e);
+        // Fallback: se popup falhar (bloqueado, etc), tenta redirect.
+        try { await auth.signInWithRedirect(provider); }
+        catch (err) { toast('Falha ao fazer login. Tente novamente.', 'error'); }
+    }
+}
+document.getElementById('login-btn').onclick = fazerLogin;
+
+// Quando o usuário volta de signInWithRedirect, o Firebase precisa processar o resultado.
+// Se for um redirect bem-sucedido, onAuthStateChanged dispara automaticamente.
+auth.getRedirectResult().catch(e => {
+    if (e.code && e.code !== 'auth/credential-already-in-use') {
+        console.error('Falha ao processar redirect de login:', e);
+    }
+});
 
 function loadAreasEstrategicas() {
     db.collection('areas_estrategicas').onSnapshot(snapshot => {
