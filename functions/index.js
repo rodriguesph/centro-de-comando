@@ -444,7 +444,7 @@ Redija a cobrança.`;
 exports.sendNotification = onCall(
   {
     ...COMMON_OPTS,
-    secrets: [RESEND_API_KEY, RESEND_FROM, WHATSAPP_TOKEN, WHATSAPP_PHONE_ID, WHATSAPP_TEMPLATE]
+    secrets: [GMAIL_USER, GMAIL_APP_PASSWORD, WHATSAPP_TOKEN, WHATSAPP_PHONE_ID, WHATSAPP_TEMPLATE]
   },
   async (request) => {
     const userEmail = requireAuth(request);
