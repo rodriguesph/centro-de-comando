@@ -145,8 +145,13 @@ async function sendEmail(to, subject, htmlOrText) {
   }
 }
 
+// URL pública do site Vetor (Vercel) — usada no botão de CTA dos e-mails.
+const VETOR_URL = 'https://centro-de-comando-kappa.vercel.app/';
+// Logo hospedado no próprio site (Vercel serve arquivos estáticos da raiz).
+const VETOR_LOGO = VETOR_URL + 'logo-vetor.svg';
+
 function buildEmailHtml({ saudacao, tipo, mensagem }) {
-  // Template HTML simples e elegante para os e-mails do Vetor
+  // Template HTML do Vetor. Compatível com Gmail, Outlook, Apple Mail.
   return `<!doctype html>
 <html><head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:Segoe UI,Arial,sans-serif;color:#0f172a">
@@ -154,17 +159,35 @@ function buildEmailHtml({ saudacao, tipo, mensagem }) {
 <tr><td align="center">
 <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 4px 12px rgba(15,23,42,0.08)">
 <tr><td style="background:linear-gradient(135deg,#0f172a,#2563eb);padding:24px 28px;color:#fff">
-  <div style="display:inline-block;width:24px;height:24px;background:#2563eb;clip-path:polygon(10% 90%,90% 50%,10% 10%,30% 50%);vertical-align:middle"></div>
-  <span style="font-weight:800;font-size:18px;letter-spacing:3px;margin-left:10px;vertical-align:middle">VETOR</span>
-  <div style="font-size:11px;letter-spacing:2px;opacity:0.85;margin-top:4px">DIREÇÃO. MAGNITUDE. RESULTADO.</div>
+  <table cellpadding="0" cellspacing="0" border="0">
+    <tr>
+      <td style="vertical-align:middle;padding-right:12px">
+        <img src="${VETOR_LOGO}" alt="Vetor" width="32" height="32" style="display:block;border:0">
+      </td>
+      <td style="vertical-align:middle">
+        <div style="font-weight:800;font-size:20px;letter-spacing:3px;line-height:1">VETOR</div>
+        <div style="font-size:10px;letter-spacing:2px;opacity:0.85;margin-top:4px">DIREÇÃO. MAGNITUDE. RESULTADO.</div>
+      </td>
+    </tr>
+  </table>
 </td></tr>
 <tr><td style="padding:28px">
   <p style="margin:0 0 8px;font-size:13px;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:700">${tipo}</p>
   <h2 style="margin:0 0 14px;font-size:18px">${saudacao}</h2>
-  <div style="font-size:14px;line-height:1.55;color:#334155;white-space:pre-wrap">${mensagem}</div>
+  <div style="font-size:14px;line-height:1.55;color:#334155;white-space:pre-wrap;margin-bottom:24px">${mensagem}</div>
+  <table cellpadding="0" cellspacing="0" border="0" style="margin:8px 0">
+    <tr><td style="background:#0f172a;border-radius:6px">
+      <a href="${VETOR_URL}" style="display:inline-block;padding:12px 28px;color:#ffffff;font-size:13px;font-weight:700;letter-spacing:1px;text-decoration:none;text-transform:uppercase">
+        Acessar o Vetor &rarr;
+      </a>
+    </td></tr>
+  </table>
+  <p style="margin:18px 0 0;font-size:11px;color:#94a3b8">
+    Ou copie e cole este link no navegador: <a href="${VETOR_URL}" style="color:#2563eb;text-decoration:none">${VETOR_URL}</a>
+  </p>
 </td></tr>
 <tr><td style="padding:18px 28px;background:#f8fafc;font-size:11px;color:#64748b;border-top:1px solid #e2e8f0">
-  Esta é uma mensagem automática do sistema Vetor. Acesse a plataforma para mais detalhes.
+  Esta é uma mensagem automática do sistema Vetor.
 </td></tr>
 </table></td></tr></table></body></html>`;
 }
