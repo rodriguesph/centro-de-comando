@@ -3,15 +3,15 @@
  * Direção. Magnitude. Resultado.
  *
  * Canais de notificação:
- *   - E-mail via Resend (resend.com)
+ *   - E-mail via Gmail SMTP (nodemailer)
  *   - WhatsApp via Cloud API da Meta (graph.facebook.com)
  *
  * Camada de IA via Claude (Anthropic).
  *
  * Segredos (Secret Manager):
  *   ANTHROPIC_API_KEY   — chave do Claude
- *   RESEND_API_KEY      — chave do Resend
- *   RESEND_FROM         — remetente verificado (ex: "Vetor <vetor@seu-dominio.com>")
+ *   GMAIL_USER          — endereço Gmail do remetente (ex: paulo@gmail.com)
+ *   GMAIL_APP_PASSWORD  — App Password de 16 caracteres (NÃO a senha normal)
  *   WHATSAPP_TOKEN      — Permanent Access Token do app Meta
  *   WHATSAPP_PHONE_ID   — ID do número WhatsApp Business
  *   WHATSAPP_TEMPLATE   — nome do template aprovado (ex: "vetor_alerta")
@@ -26,15 +26,15 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const Anthropic = require('@anthropic-ai/sdk');
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 
 admin.initializeApp();
 const db = admin.firestore();
 
 // Secrets
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
-const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
-const RESEND_FROM = defineSecret('RESEND_FROM');
+const GMAIL_USER = defineSecret('GMAIL_USER');
+const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
 const WHATSAPP_TOKEN = defineSecret('WHATSAPP_TOKEN');
 const WHATSAPP_PHONE_ID = defineSecret('WHATSAPP_PHONE_ID');
 const WHATSAPP_TEMPLATE = defineSecret('WHATSAPP_TEMPLATE');
@@ -109,25 +109,38 @@ async function callClaudeJson(systemPrompt, userPrompt) {
 }
 
 // ============================================================================
-// CAMADA E-MAIL (Resend)
+// CAMADA E-MAIL (Gmail SMTP via Nodemailer)
 // ============================================================================
+let _mailTransporter = null;
+function getMailTransporter() {
+  if (_mailTransporter) return _mailTransporter;
+  _mailTransporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: GMAIL_USER.value(),
+      pass: GMAIL_APP_PASSWORD.value()
+    }
+  });
+  return _mailTransporter;
+}
+
 async function sendEmail(to, subject, htmlOrText) {
   if (!to) return { ok: false, reason: 'sem-email' };
   try {
-    const resend = new Resend(RESEND_API_KEY.value());
+    const transporter = getMailTransporter();
     const isHtml = /<\w+/.test(htmlOrText);
+    const fromEmail = GMAIL_USER.value();
     const payload = {
-      from: RESEND_FROM.value(),
-      to: [to],
+      from: `"Vetor" <${fromEmail}>`,
+      to,
       subject
     };
     if (isHtml) payload.html = htmlOrText;
     else payload.text = htmlOrText;
-    const { data, error } = await resend.emails.send(payload);
-    if (error) { console.error('[resend]', error); return { ok: false, reason: error.message || 'erro' }; }
-    return { ok: true, id: data?.id };
+    const info = await transporter.sendMail(payload);
+    return { ok: true, id: info.messageId };
   } catch (e) {
-    console.error('[resend] exception', e);
+    console.error('[gmail-smtp] exception', e);
     return { ok: false, reason: e.message };
   }
 }
@@ -367,7 +380,7 @@ Em respostas analíticas: cite NÚMEROS e nomes específicos. Use **negrito** pa
 exports.sendSmartReminder = onCall(
   {
     ...COMMON_OPTS,
-    secrets: [ANTHROPIC_API_KEY, RESEND_API_KEY, RESEND_FROM, WHATSAPP_TOKEN, WHATSAPP_PHONE_ID, WHATSAPP_TEMPLATE]
+    secrets: [ANTHROPIC_API_KEY, GMAIL_USER, GMAIL_APP_PASSWORD, WHATSAPP_TOKEN, WHATSAPP_PHONE_ID, WHATSAPP_TEMPLATE]
   },
   async (request) => {
     const userEmail = requireAuth(request);
@@ -495,7 +508,7 @@ exports.dailyBriefing = onSchedule(
     schedule: '0 7 * * *',
     timeZone: 'America/Sao_Paulo',
     region: REGION,
-    secrets: [ANTHROPIC_API_KEY, RESEND_API_KEY, RESEND_FROM, WHATSAPP_TOKEN, WHATSAPP_PHONE_ID, WHATSAPP_TEMPLATE]
+    secrets: [ANTHROPIC_API_KEY, GMAIL_USER, GMAIL_APP_PASSWORD, WHATSAPP_TOKEN, WHATSAPP_PHONE_ID, WHATSAPP_TEMPLATE]
   },
   async () => {
     const tasksSnap = await db.collection('tarefas').get();
