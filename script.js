@@ -219,6 +219,7 @@ function loadDataTasks() {
         if (document.getElementById('sec-kanban').classList.contains('active')) renderKanban();
         if (document.getElementById('sec-busca').classList.contains('active')) executarBusca();
         if (document.getElementById('sec-arquivo').classList.contains('active')) renderArquivo();
+        migrarRespEmails(); // garante resp_emails em tarefas antigas (preparação para Security Rules)
         autoArchiveExpired(); // fallback enquanto Cloud Function não está deployada
     }, err => {
         console.error('Erro snapshot tarefas:', err);
@@ -707,7 +708,9 @@ async function saveDemand() {
             const newDocRef = db.collection('tarefas').doc();
             batch.set(newDocRef, {
                 area, project, text: title, descricao: desc, data_inicio: dateStart, data_fim: dateEnd,
-                status: 'fazer', prioridade, resps: [r],
+                status: 'fazer', prioridade,
+                resps: [r],
+                resp_emails: [r.email], // desnormalizado para Security Rules
                 criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
                 historico: [], email: r.email, criadoPor: currentUserEmail
             });
@@ -754,6 +757,7 @@ async function duplicarTask() {
             data_inicio: t.data_inicio || "", data_fim: t.data_fim || "",
             status: 'fazer', prioridade: t.prioridade || 'media',
             resps: t.resps || [],
+            resp_emails: (t.resps || []).map(r => r.email).filter(Boolean),
             criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
             historico: [{ data: new Date().toLocaleString('pt-BR'), autor: "SISTEMA", texto: `Demanda duplicada.` }],
             email: t.email || (t.resps && t.resps.length > 0 ? t.resps[0].email : ""),
@@ -1050,6 +1054,7 @@ async function saveModalChanges() {
         update.data_fim = currentDataFim;
         update.prioridade = currentPrio;
         update.resps = currentResps;
+        update.resp_emails = (currentResps || []).map(r => r.email).filter(Boolean);
     }
 
     let hasMeaningfulChange = false;
@@ -1711,6 +1716,7 @@ async function confirmarCadastroVoz() {
                 data_inicio: p.data_inicio, data_fim: p.data_fim,
                 status: 'fazer', prioridade: p.prioridade || 'media',
                 resps: [{ nome: u.nome, email: u.email, papel: r.papel || 'executor' }],
+                resp_emails: [u.email],
                 criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
                 historico: [{ data: new Date().toLocaleString('pt-BR'), autor: 'SISTEMA', texto: 'Cadastrada via voz + Vetor IA.' }],
                 email: u.email, criadoPor: currentUserEmail
@@ -1844,6 +1850,7 @@ async function executarAcoesIA(acoes) {
                     data_inicio: p.data_inicio, data_fim: p.data_fim,
                     status: 'fazer', prioridade: p.prioridade || 'media',
                     resps: [{ nome: u.nome, email: u.email, papel: p.responsaveis[0].papel || 'executor' }],
+                    resp_emails: [u.email],
                     criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
                     historico: [{ data: new Date().toLocaleString('pt-BR'), autor: 'SISTEMA', texto: 'Cadastrada via Vetor IA.' }],
                     email: u.email, criadoPor: currentUserEmail
@@ -2012,6 +2019,45 @@ function renderArquivo() {
         html += `</div>`;
     });
     cont.innerHTML = html;
+}
+
+// Migração one-shot: preenche resp_emails (campo desnormalizado para Security Rules)
+// para tarefas antigas que não tinham. Só super-admin dispara.
+let migracaoRespEmailsRan = false;
+async function migrarRespEmails() {
+    if (migracaoRespEmailsRan) return;
+    if (currentUserRole !== 'super-admin') return;
+    migracaoRespEmailsRan = true;
+
+    const candidatas = allTasks.filter(t => {
+        const respsArr = Array.isArray(t.resps) ? t.resps : [];
+        const expectedEmails = respsArr.map(r => r && r.email).filter(Boolean);
+        const currentEmails = Array.isArray(t.resp_emails) ? t.resp_emails : null;
+        if (currentEmails === null) return expectedEmails.length >= 0; // sempre que faltar campo
+        // Se já existe, conferir se está em sincronia
+        if (currentEmails.length !== expectedEmails.length) return true;
+        const a = [...currentEmails].sort();
+        const b = [...expectedEmails].sort();
+        return JSON.stringify(a) !== JSON.stringify(b);
+    });
+
+    if (candidatas.length === 0) return;
+
+    try {
+        // Lotes de 400 (limite Firestore = 500 por batch)
+        for (let i = 0; i < candidatas.length; i += 400) {
+            const lote = candidatas.slice(i, i + 400);
+            const batch = db.batch();
+            lote.forEach(t => {
+                const emails = (t.resps || []).map(r => r && r.email).filter(Boolean);
+                batch.update(db.collection('tarefas').doc(t.id), { resp_emails: emails });
+            });
+            await batch.commit();
+        }
+        console.log(`[migracao] resp_emails populado em ${candidatas.length} tarefa(s).`);
+    } catch (e) {
+        console.warn('[migracao] falha:', e);
+    }
 }
 
 // Auto-arquivar (fallback client-side enquanto a Cloud Function não está deployada).

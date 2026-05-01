@@ -1,8 +1,13 @@
 rules_version = '2';
 // ==========================================================================
 // VETOR — Regras de segurança do Firestore
+// ==========================================================================
 // Aplicadas no servidor; impedem manipulação direta via console do navegador.
 // Aplicar com:  firebase deploy --only firestore:rules
+//
+// Observação: o Firestore Rules tem sintaxe limitada (não suporta arrow
+// functions, .map, .filter etc). Por isso, mantemos um campo desnormalizado
+// `resp_emails: list<string>` em cada tarefa, sincronizado pelo cliente.
 // ==========================================================================
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -16,7 +21,6 @@ service cloud.firestore {
       return request.auth.token.email.lower();
     }
 
-    // Usuário existe na coleção `usuarios` (credenciado)
     function isCredentialed() {
       return isSignedIn() &&
              exists(/databases/$(database)/documents/usuarios/$(userEmail()));
@@ -30,46 +34,25 @@ service cloud.firestore {
       return isCredentialed() && userDoc().papel == 'super-admin';
     }
 
-    // Quem é gestor da área (consulta o documento da área)
     function isGestorArea(areaId) {
       return isCredentialed() &&
              exists(/databases/$(database)/documents/areas_estrategicas/$(areaId)) &&
              userEmail() in get(/databases/$(database)/documents/areas_estrategicas/$(areaId)).data.gestores;
     }
 
-    // Verifica se o usuário é gestor da tarefa em questão (área OU listado em resps com papel 'gestor')
-    function isGestorTask(taskData) {
-      return isSuperAdmin() ||
-             (taskData.area != null && isGestorArea(taskData.area)) ||
-             ( taskData.resps != null &&
-               taskData.resps.size() > 0 &&
-               userEmail() in taskData.resps.map(r => r.email) &&
-               // (best-effort) presença com papel 'gestor' — Firestore não tem expressão
-               // direta de filtro em arrays de objeto; valida que o e-mail está em resps
-               // e deixamos a granularidade de "papel" para a Cloud Function que envia ações.
-               // Esta regra previne escrita por terceiros não envolvidos.
-               true );
-    }
-
-    // Verifica se é executor (responsável) da tarefa
+    // Verifica se o usuário é executor da tarefa (consulta o campo desnormalizado)
     function isExecutorTask(taskData) {
-      return taskData.resps != null &&
-             taskData.resps.size() > 0 &&
-             userEmail() in taskData.resps.map(r => r.email);
+      return taskData.resp_emails is list && userEmail() in taskData.resp_emails;
     }
 
     // ---------------- COLEÇÃO: usuarios ----------------
-    // O documento ID pode ser email ou random; o campo 'email' é a fonte da verdade.
     match /usuarios/{userId} {
-      // Qualquer credenciado lê (para tradutor de nomes, listagens, etc.)
       allow read: if isCredentialed();
-
-      // Super-admin cria/exclui usuários.
       allow create, delete: if isSuperAdmin();
 
       // Update:
       //  - Super-admin pode tudo.
-      //  - Próprio usuário pode editar APENAS o campo 'telefone' (não pode mudar papel/email/nome).
+      //  - Próprio usuário pode editar APENAS o campo 'telefone'.
       allow update: if isSuperAdmin() || (
         isCredentialed() &&
         resource.data.email == userEmail() &&
@@ -85,34 +68,34 @@ service cloud.firestore {
 
     // ---------------- COLEÇÃO: tarefas ----------------
     match /tarefas/{taskId} {
-      // Leitura: super-admin vê tudo; demais veem se forem gestores de área
-      // ou estiverem listados em resps. (A coleção será filtrada client-side
-      // de qualquer forma; aqui evitamos vazamento via queries diretas.)
+      // Leitura: super-admin vê tudo; gestores veem da sua área;
+      // executores veem onde estão listados.
       allow read: if isCredentialed() && (
         isSuperAdmin() ||
         (resource.data.area != null && isGestorArea(resource.data.area)) ||
-        (resource.data.resps != null && userEmail() in resource.data.resps.map(r => r.email))
+        isExecutorTask(resource.data)
       );
 
-      // Criação: super-admin sempre; gestor de área cria na sua área;
-      // qualquer credenciado pode criar sem área formal (será fantasma) — opcional.
+      // Criação: super-admin sempre; gestor de área cria na sua área.
+      // Validação mínima de schema.
       allow create: if isCredentialed() && (
         isSuperAdmin() ||
         (request.resource.data.area != null && isGestorArea(request.resource.data.area))
       ) &&
-      // Campos obrigatórios mínimos
       request.resource.data.text is string &&
       request.resource.data.project is string &&
       request.resource.data.status in ['fazer','andamento','aprovacao','concluido'];
 
-      // Atualização: gestores podem alterar qualquer campo; executores só status e historico.
-      // Campos de arquivamento (arquivada, arquivada_em, arquivada_por) são livres para gestor.
+      // Atualização:
+      //  - Super-admin: qualquer campo.
+      //  - Gestor de área: qualquer campo da tarefa da sua área.
+      //  - Executor: apenas status (para 'fazer'|'andamento'|'aprovacao') e historico.
+      //              Nunca pode marcar como concluído nem arquivar.
       allow update: if isCredentialed() && (
         isSuperAdmin() ||
         (resource.data.area != null && isGestorArea(resource.data.area)) ||
         (
           isExecutorTask(resource.data) &&
-          // Executor só pode mudar status (e adicionar histórico). NUNCA marcar como concluído nem arquivar.
           request.resource.data.diff(resource.data).affectedKeys()
               .hasOnly(['status','historico']) &&
           request.resource.data.status in ['fazer','andamento','aprovacao']
@@ -126,11 +109,15 @@ service cloud.firestore {
       );
     }
 
-    // ---------------- COLEÇÃO: ai_logs (auditoria das ações de IA) ----------------
-    // Cloud Functions gravam aqui via admin SDK (ignora rules);
-    // clientes só leem suas próprias entradas.
+    // ---------------- COLEÇÃO: ai_logs ----------------
     match /ai_logs/{logId} {
       allow read: if isCredentialed() && (isSuperAdmin() || resource.data.userEmail == userEmail());
+      allow write: if false; // só admin SDK
+    }
+
+    // ---------------- COLEÇÃO: briefings_diarios ----------------
+    match /briefings_diarios/{id} {
+      allow read: if isSuperAdmin();
       allow write: if false; // só admin SDK
     }
 
