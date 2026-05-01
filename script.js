@@ -192,6 +192,7 @@ function loadUsersDatabase() {
         populateUserSelectsMaster();
         renderUsers();
         if (document.getElementById('sec-admin').classList.contains('active')) renderAdminPanel();
+        migrarUsuariosParaEmailId(); // converte IDs aleatórios para email-as-id
     }, err => {
         console.error('Erro snapshot usuários:', err);
     });
@@ -468,7 +469,8 @@ async function cadastrarUsuario() {
     const telefone = normalizarTelefone(document.getElementById('novoUserTelefone').value.trim());
     if (!nome || !email) return toast('Preencha nome e e-mail.', 'warning');
     try {
-        await db.collection('usuarios').add({ nome, email, telefone, papel: 'membro' });
+        // ID do documento = email (necessário para Security Rules conseguirem checar via exists())
+        await db.collection('usuarios').doc(email).set({ nome, email, telefone, papel: 'membro' });
         document.getElementById('novoUserNome').value = '';
         document.getElementById('novoUserEmail').value = '';
         document.getElementById('novoUserTelefone').value = '';
@@ -2019,6 +2021,38 @@ function renderArquivo() {
         html += `</div>`;
     });
     cont.innerHTML = html;
+}
+
+// Migração one-shot: converte usuários antigos (ID aleatório) para ID = email.
+// Necessário porque as Security Rules só conseguem checar por exists(/usuarios/{email}).
+let migracaoUsuariosRan = false;
+async function migrarUsuariosParaEmailId() {
+    if (migracaoUsuariosRan) return;
+    if (currentUserRole !== 'super-admin') return;
+    migracaoUsuariosRan = true;
+
+    const candidatos = allUsers.filter(u => u.id !== u.email && u.email);
+    if (candidatos.length === 0) return;
+
+    let sucesso = 0;
+    for (const u of candidatos) {
+        try {
+            // 1. Cria doc novo com ID = email
+            await db.collection('usuarios').doc(u.email).set({
+                nome: u.nome || '',
+                email: u.email,
+                telefone: u.telefone || '',
+                papel: u.papel || 'membro'
+            });
+            // 2. Apaga o doc antigo de ID aleatório
+            await db.collection('usuarios').doc(u.id).delete();
+            sucesso++;
+        } catch (e) {
+            console.warn('[migracao usuarios] falhou para', u.email, e);
+        }
+    }
+    console.log(`[migracao usuarios] ${sucesso}/${candidatos.length} usuário(s) migrados para email-as-id.`);
+    if (sucesso > 0) toast(`Migração: ${sucesso} usuário(s) atualizados para o novo formato.`, 'success');
 }
 
 // Migração one-shot: preenche resp_emails (campo desnormalizado para Security Rules)
