@@ -1,0 +1,141 @@
+rules_version = '2';
+// ==========================================================================
+// VETOR — Regras de segurança do Firestore
+// Aplicadas no servidor; impedem manipulação direta via console do navegador.
+// Aplicar com:  firebase deploy --only firestore:rules
+// ==========================================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------- HELPERS ----------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    // Usuário existe na coleção `usuarios` (credenciado)
+    function isCredentialed() {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/usuarios/$(userEmail()));
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/usuarios/$(userEmail())).data;
+    }
+
+    function isSuperAdmin() {
+      return isCredentialed() && userDoc().papel == 'super-admin';
+    }
+
+    // Quem é gestor da área (consulta o documento da área)
+    function isGestorArea(areaId) {
+      return isCredentialed() &&
+             exists(/databases/$(database)/documents/areas_estrategicas/$(areaId)) &&
+             userEmail() in get(/databases/$(database)/documents/areas_estrategicas/$(areaId)).data.gestores;
+    }
+
+    // Verifica se o usuário é gestor da tarefa em questão (área OU listado em resps com papel 'gestor')
+    function isGestorTask(taskData) {
+      return isSuperAdmin() ||
+             (taskData.area != null && isGestorArea(taskData.area)) ||
+             ( taskData.resps != null &&
+               taskData.resps.size() > 0 &&
+               userEmail() in taskData.resps.map(r => r.email) &&
+               // (best-effort) presença com papel 'gestor' — Firestore não tem expressão
+               // direta de filtro em arrays de objeto; valida que o e-mail está em resps
+               // e deixamos a granularidade de "papel" para a Cloud Function que envia ações.
+               // Esta regra previne escrita por terceiros não envolvidos.
+               true );
+    }
+
+    // Verifica se é executor (responsável) da tarefa
+    function isExecutorTask(taskData) {
+      return taskData.resps != null &&
+             taskData.resps.size() > 0 &&
+             userEmail() in taskData.resps.map(r => r.email);
+    }
+
+    // ---------------- COLEÇÃO: usuarios ----------------
+    // O documento ID pode ser email ou random; o campo 'email' é a fonte da verdade.
+    match /usuarios/{userId} {
+      // Qualquer credenciado lê (para tradutor de nomes, listagens, etc.)
+      allow read: if isCredentialed();
+
+      // Super-admin cria/exclui usuários.
+      allow create, delete: if isSuperAdmin();
+
+      // Update:
+      //  - Super-admin pode tudo.
+      //  - Próprio usuário pode editar APENAS o campo 'telefone' (não pode mudar papel/email/nome).
+      allow update: if isSuperAdmin() || (
+        isCredentialed() &&
+        resource.data.email == userEmail() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['telefone'])
+      );
+    }
+
+    // ---------------- COLEÇÃO: areas_estrategicas ----------------
+    match /areas_estrategicas/{areaId} {
+      allow read: if isCredentialed();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    // ---------------- COLEÇÃO: tarefas ----------------
+    match /tarefas/{taskId} {
+      // Leitura: super-admin vê tudo; demais veem se forem gestores de área
+      // ou estiverem listados em resps. (A coleção será filtrada client-side
+      // de qualquer forma; aqui evitamos vazamento via queries diretas.)
+      allow read: if isCredentialed() && (
+        isSuperAdmin() ||
+        (resource.data.area != null && isGestorArea(resource.data.area)) ||
+        (resource.data.resps != null && userEmail() in resource.data.resps.map(r => r.email))
+      );
+
+      // Criação: super-admin sempre; gestor de área cria na sua área;
+      // qualquer credenciado pode criar sem área formal (será fantasma) — opcional.
+      allow create: if isCredentialed() && (
+        isSuperAdmin() ||
+        (request.resource.data.area != null && isGestorArea(request.resource.data.area))
+      ) &&
+      // Campos obrigatórios mínimos
+      request.resource.data.text is string &&
+      request.resource.data.project is string &&
+      request.resource.data.status in ['fazer','andamento','aprovacao','concluido'];
+
+      // Atualização: gestores podem alterar qualquer campo; executores só status e historico.
+      allow update: if isCredentialed() && (
+        isSuperAdmin() ||
+        (resource.data.area != null && isGestorArea(resource.data.area)) ||
+        (
+          isExecutorTask(resource.data) &&
+          // Executor só pode mudar status (e adicionar histórico). NUNCA marcar como concluído.
+          request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status','historico']) &&
+          request.resource.data.status in ['fazer','andamento','aprovacao']
+        )
+      );
+
+      // Exclusão: somente super-admin ou gestor da área.
+      allow delete: if isCredentialed() && (
+        isSuperAdmin() ||
+        (resource.data.area != null && isGestorArea(resource.data.area))
+      );
+    }
+
+    // ---------------- COLEÇÃO: ai_logs (auditoria das ações de IA) ----------------
+    // Cloud Functions gravam aqui via admin SDK (ignora rules);
+    // clientes só leem suas próprias entradas.
+    match /ai_logs/{logId} {
+      allow read: if isCredentialed() && (isSuperAdmin() || resource.data.userEmail == userEmail());
+      allow write: if false; // só admin SDK
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

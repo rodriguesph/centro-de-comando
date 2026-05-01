@@ -3,35 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Centro de Comando | Gestão Estratégica</title>
-    
+    <meta name="description" content="Vetor — Direção e magnitude para sua operação. Plataforma de gestão estratégica de projetos com IA.">
+    <title>Vetor | Direção e Magnitude</title>
+
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><polygon points='10,90 90,50 10,10 30,50' fill='%232563eb'/></svg>">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
-    <script type="text/javascript"> (function() { emailjs.init("avO3v8VXJm6ZQyZ9a"); })(); </script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-functions-compat.js"></script>
 </head>
 <body>
 
-    <div id="login-screen" class="auth-container">
-        <div class="auth-box shadow">
-            <h1 class="logo">CENTRO DE <span class="bold">COMANDO</span></h1>
-            <p>Acesse a plataforma estratégica</p>
-            <button id="login-btn" class="btn-primary" style="width: 100%; margin-top: 20px;">ENTRAR COM CONTA GOOGLE</button>
+    <!-- ===================== TOAST CONTAINER ===================== -->
+    <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- ===================== CONFIRM DIALOG ===================== -->
+    <div id="confirm-dialog" class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+        <div class="modal-content shadow" style="max-width: 440px;">
+            <div class="modal-header"><h3 id="confirm-title">Confirmar</h3></div>
+            <p id="confirm-message" style="margin: 10px 0 25px; color: #334155;"></p>
+            <div class="modal-footer">
+                <button id="confirm-cancel" class="btn-secondary" style="flex:1;">CANCELAR</button>
+                <button id="confirm-ok" class="btn-primary" style="flex:1;">CONFIRMAR</button>
+            </div>
         </div>
     </div>
 
+    <!-- ===================== LOGIN ===================== -->
+    <div id="login-screen" class="auth-container">
+        <div class="auth-box shadow">
+            <div class="vetor-logo-large" aria-label="Vetor">
+                <svg viewBox="0 0 100 100" width="56" height="56" aria-hidden="true">
+                    <polygon points="10,90 90,50 10,10 30,50" fill="#2563eb"/>
+                </svg>
+                <h1>VETOR</h1>
+            </div>
+            <p class="tagline">Direção. Magnitude. Resultado.</p>
+            <p class="auth-sub">Plataforma estratégica de execução com inteligência artificial.</p>
+            <button id="login-btn" class="btn-primary" style="width: 100%; margin-top: 25px;">ENTRAR COM CONTA GOOGLE</button>
+            <p class="auth-foot">Acesso restrito a membros credenciados.</p>
+        </div>
+    </div>
+
+    <!-- ===================== APP ===================== -->
     <div id="app-screen" style="display: none;">
+
         <header class="main-header">
             <div class="header-container">
-                <h1 class="logo">CENTRO DE <span class="bold">COMANDO</span></h1>
+                <div class="vetor-logo" aria-label="Vetor — Direção e Magnitude">
+                    <svg viewBox="0 0 100 100" width="28" height="28" aria-hidden="true">
+                        <polygon points="10,90 90,50 10,10 30,50" fill="#2563eb"/>
+                    </svg>
+                    <span class="logo-text">VETOR</span>
+                </div>
                 <div class="user-control">
-                    <span id="saudacao" class="user-email">Autenticando...</span>
+                    <button id="btn-vetor-ia" class="btn-ia" title="Abrir o assistente Vetor IA" onclick="toggleVetorIA()">
+                        <span class="ia-pulse"></span>VETOR IA
+                    </button>
+                    <span id="saudacao" class="user-email" onclick="abrirMeuPerfil()" title="Editar meu perfil" style="cursor:pointer;">Autenticando...</span>
                     <button onclick="logout()" class="btn-secondary">Sair</button>
                 </div>
             </div>
@@ -39,17 +74,73 @@
 
         <nav class="main-nav">
             <div class="nav-container">
-                <button onclick="showSection('dashboard-bi')" id="btn-nav-bi" class="nav-link active">LIVE BI</button>
+                <button onclick="showSection('hoje')" id="btn-nav-hoje" class="nav-link active">HOJE</button>
+                <button onclick="showSection('dashboard-bi')" id="btn-nav-bi" class="nav-link">LIVE BI</button>
                 <button onclick="showSection('acompanhamento')" id="btn-nav-op" class="nav-link">OPERACIONAL</button>
+                <button onclick="showSection('kanban')" id="btn-nav-kanban" class="nav-link">KANBAN</button>
+                <button onclick="showSection('busca')" id="btn-nav-busca" class="nav-link">BUSCA</button>
                 <button onclick="showSection('usuarios')" id="btn-nav-usuarios" class="nav-link" style="display:none;">EQUIPE</button>
-                <button onclick="showSection('admin')" id="btn-nav-admin" class="nav-link" style="display:none; color: #dc3545;">ADMINISTRAÇÃO</button>
-                <button onclick="showSection('novo-projeto')" id="btn-nav-novo" class="btn-primary" style="display:none; margin-left: auto;">NOVO PROJETO</button>
+                <button onclick="showSection('admin')" id="btn-nav-admin" class="nav-link" style="display:none; color: #dc3545;">ADMIN</button>
+                <div class="nav-actions">
+                    <button onclick="abrirCadastroVoz()" id="btn-nav-voz" class="btn-voice" style="display:none;" title="Cadastrar por voz">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 006 6.92V21h2v-3.08A7 7 0 0019 11h-2z"/></svg>
+                        VOZ
+                    </button>
+                    <button onclick="showSection('novo-projeto')" id="btn-nav-novo" class="btn-primary" style="display:none;">NOVA DEMANDA</button>
+                </div>
             </div>
         </nav>
 
         <main class="main-content">
-            
-            <section id="sec-dashboard-bi" class="content-section active">
+
+            <!-- ====== ABA HOJE ====== -->
+            <section id="sec-hoje" class="content-section active">
+                <div class="section-header">
+                    <h2>Sua execução de hoje</h2>
+                    <div class="hoje-date" id="hojeDataLabel"></div>
+                </div>
+
+                <div class="hoje-grid">
+                    <div class="hoje-card shadow" style="border-top: 4px solid #2563eb;">
+                        <div class="hoje-card-header">
+                            <h3>Para fazer agora</h3>
+                            <span class="hoje-count" id="hoje-count-agora">0</span>
+                        </div>
+                        <p class="hoje-sub">Em execução ou com prazo até amanhã.</p>
+                        <div id="hoje-list-agora" class="hoje-list"></div>
+                    </div>
+
+                    <div class="hoje-card shadow" style="border-top: 4px solid #dc3545;">
+                        <div class="hoje-card-header">
+                            <h3>Atrasadas</h3>
+                            <span class="hoje-count" id="hoje-count-atraso">0</span>
+                        </div>
+                        <p class="hoje-sub">Vencidas. Resolva ou negocie novo prazo.</p>
+                        <div id="hoje-list-atraso" class="hoje-list"></div>
+                    </div>
+
+                    <div class="hoje-card shadow" id="hoje-card-validar" style="border-top: 4px solid #10b981; display:none;">
+                        <div class="hoje-card-header">
+                            <h3>Aguardando sua validação</h3>
+                            <span class="hoje-count" id="hoje-count-validar">0</span>
+                        </div>
+                        <p class="hoje-sub">Executores reportaram pronto. Aprove ou devolva.</p>
+                        <div id="hoje-list-validar" class="hoje-list"></div>
+                    </div>
+                </div>
+
+                <div class="hoje-resumo shadow" id="hoje-resumo" style="display:none;">
+                    <div class="hoje-resumo-icon">⚡</div>
+                    <div class="hoje-resumo-body">
+                        <strong>Vetor IA pode te ajudar.</strong>
+                        <span>Peça um briefing executivo ou cadastre rapidamente uma demanda nova.</span>
+                    </div>
+                    <button class="btn-primary" onclick="toggleVetorIA()">ABRIR VETOR IA</button>
+                </div>
+            </section>
+
+            <!-- ====== ABA LIVE BI ====== -->
+            <section id="sec-dashboard-bi" class="content-section">
                 <div class="section-header" style="flex-wrap: wrap; gap: 15px;">
                     <h2>Business Intelligence</h2>
                     <div class="bi-filters-row" style="display: flex; gap: 15px; margin-left: auto;">
@@ -67,6 +158,7 @@
                                 <div id="filter-checkboxes-proj" class="dropdown-content shadow"></div>
                             </div>
                         </div>
+                        <button class="btn-export" onclick="exportarBI('csv')" title="Exportar recorte atual em CSV">⤓ CSV</button>
                     </div>
                 </div>
 
@@ -116,6 +208,7 @@
                 </div>
             </section>
 
+            <!-- ====== ABA NOVA DEMANDA ====== -->
             <section id="sec-novo-projeto" class="content-section">
                 <div class="form-container shadow">
                     <h3>Inclusão de Demanda</h3>
@@ -132,11 +225,20 @@
                     </div>
                     <div class="form-group"><label>Título da Tarefa</label><input type="text" id="taskTitle"></div>
                     <div class="form-group"><label>Escopo Detalhado</label><textarea id="taskDesc" rows="3"></textarea></div>
-                    
+
+                    <div class="form-group">
+                        <label>Prioridade Estratégica</label>
+                        <div class="priority-toggle">
+                            <label><input type="radio" name="prioridadeNovo" value="alta"><span class="priority-pill prio-alta">Alta</span></label>
+                            <label><input type="radio" name="prioridadeNovo" value="media" checked><span class="priority-pill prio-media">Média</span></label>
+                            <label><input type="radio" name="prioridadeNovo" value="baixa"><span class="priority-pill prio-baixa">Baixa</span></label>
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label>Equipe e Papel nesta Demanda</label>
                         <div id="responsaveis-container"></div>
-                        <button onclick="addResponsavelField('responsaveis-container')" class="btn-secondary" style="margin-top: 5px; padding: 5px 10px; font-size: 11px;">➕ Adicionar Outro Envolvido (Clonar Demanda)</button>
+                        <button onclick="addResponsavelField('responsaveis-container')" class="btn-secondary" style="margin-top: 5px; padding: 5px 10px; font-size: 11px;">+ Adicionar Outro Envolvido (Clonar Demanda)</button>
                     </div>
 
                     <div class="form-grid">
@@ -147,18 +249,53 @@
                 </div>
             </section>
 
+            <!-- ====== ABA OPERACIONAL ====== -->
             <section id="sec-acompanhamento" class="content-section">
                 <div class="section-header" style="flex-wrap: wrap; gap: 15px;">
                     <h2>Visão Operacional</h2>
                     <div style="display: flex; gap: 10px; margin-left: auto;">
                         <select id="filterAreaOp" onchange="updateOpProjectFilter()" class="select-filter" style="width: 200px; padding: 8px;"></select>
                         <select id="filterProjectOp" onchange="renderDashboard()" class="select-filter" style="width: 200px; padding: 8px;"></select>
+                        <button class="btn-export" onclick="exportarOperacional('csv')" title="Exportar visão operacional em CSV">⤓ CSV</button>
                     </div>
                 </div>
                 <div id="stats-grid" class="stats-grid"></div>
                 <div id="projectsBoard" class="table-container shadow"></div>
             </section>
 
+            <!-- ====== ABA KANBAN ====== -->
+            <section id="sec-kanban" class="content-section">
+                <div class="section-header" style="flex-wrap: wrap; gap: 15px;">
+                    <h2>Kanban de Execução</h2>
+                    <div style="display: flex; gap: 10px; margin-left: auto;">
+                        <select id="kanbanAreaFilter" onchange="renderKanban()" class="select-filter" style="width: 200px; padding: 8px;"></select>
+                        <select id="kanbanProjectFilter" onchange="renderKanban()" class="select-filter" style="width: 200px; padding: 8px;"></select>
+                    </div>
+                </div>
+                <p class="kanban-hint">Arraste cartões entre as colunas para mudar o status. Permissões respeitadas: executores movem até "Aguardando Validação"; só gestores marcam "Concluída".</p>
+                <div class="kanban-board" id="kanbanBoard"></div>
+            </section>
+
+            <!-- ====== ABA BUSCA ====== -->
+            <section id="sec-busca" class="content-section">
+                <div class="section-header">
+                    <h2>Busca Global</h2>
+                </div>
+                <div class="form-container shadow" style="margin-bottom: 20px;">
+                    <input type="text" id="buscaInput" placeholder="Procure por título, projeto, escopo, responsável, área..." oninput="executarBusca()" style="font-size: 16px; padding: 14px;">
+                    <div class="busca-filtros">
+                        <label><input type="checkbox" class="busca-status-filter" value="atrasada" checked> Atrasadas</label>
+                        <label><input type="checkbox" class="busca-status-filter" value="execucao" checked> Em execução</label>
+                        <label><input type="checkbox" class="busca-status-filter" value="aguardando" checked> Aguardando OK</label>
+                        <label><input type="checkbox" class="busca-status-filter" value="critica" checked> Críticas</label>
+                        <label><input type="checkbox" class="busca-status-filter" value="nao_iniciada" checked> Não iniciadas</label>
+                        <label><input type="checkbox" class="busca-status-filter" value="concluida"> Concluídas</label>
+                    </div>
+                </div>
+                <div id="buscaResultados" class="busca-resultados"></div>
+            </section>
+
+            <!-- ====== ABA EQUIPE ====== -->
             <section id="sec-usuarios" class="content-section">
                 <div class="form-container shadow">
                     <h3>Credenciar Novo Membro</h3>
@@ -166,12 +303,15 @@
                         <input type="text" id="novoUserNome" placeholder="Nome Completo">
                         <input type="email" id="novoUserEmail" placeholder="E-mail Google">
                     </div>
-                    <button onclick="cadastrarUsuario()" class="btn-primary" style="margin-top: 10px;">LIBERAR ACESSO</button>
+                    <input type="tel" id="novoUserTelefone" placeholder="WhatsApp (com DDI: +55 11 99999-9999)" style="margin-top: 10px;">
+                    <p style="font-size: 11px; color: #64748b; margin-top: 6px;">O telefone é opcional. Sem ele, a pessoa só recebe notificações por e-mail. Cada membro pode editar o próprio número clicando no nome no canto superior direito.</p>
+                    <button onclick="cadastrarUsuario()" class="btn-primary" style="margin-top: 14px;">LIBERAR ACESSO</button>
                 </div>
                 <h3 style="margin-top: 40px;">Membros Ativos</h3>
                 <div id="lista-usuarios-board"></div>
             </section>
 
+            <!-- ====== ABA ADMIN ====== -->
             <section id="sec-admin" class="content-section">
                 <div class="section-header"><h2>Controle Arquitetural</h2></div>
                 <div class="form-grid">
@@ -191,12 +331,12 @@
                         <h4>Áreas Ativas no Sistema</h4>
                         <div id="admin-areas-list" style="font-size: 11px; max-height: 200px; overflow-y: auto;"></div>
                     </div>
-                    
+
                     <div class="form-container shadow" style="border-top: 4px solid #dc3545;">
                         <h3 style="color: #dc3545; margin-top: 0;">Gestão de Projetos (Em Lote)</h3>
                         <p style="font-size: 11px; color: #666; margin-bottom: 10px;">Clique em um projeto para renomeá-lo ou movê-lo de área. A alteração reescreve todas as tarefas vinculadas.</p>
                         <div id="admin-projects-list" style="max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 4px; margin-bottom: 15px;"></div>
-                        
+
                         <div id="admin-edit-project-form" style="display: none; background: #fff5f5; border: 1px solid #fc8181; padding: 15px; border-radius: 4px;">
                             <h4 style="color: #c53030; margin-top: 0; font-size: 12px;">Editando: <span id="adminEditProjTarget" style="font-weight: 700;"></span></h4>
                             <div class="form-group"><label>Novo Nome do Projeto</label><input type="text" id="adminNewProjectName"></div>
@@ -212,9 +352,10 @@
         </main>
     </div>
 
-    <div id="drilldownModal" class="modal">
+    <!-- ===================== MODAIS ===================== -->
+    <div id="drilldownModal" class="modal" role="dialog" aria-modal="true">
         <div class="modal-content shadow" style="max-width: 900px;">
-            <div class="modal-header"><h3 id="drilldownTitle">Raio-X</h3><button onclick="closeDrilldown()" class="close-btn">&times;</button></div>
+            <div class="modal-header"><h3 id="drilldownTitle">Raio-X</h3><button onclick="closeDrilldown()" class="close-btn" aria-label="Fechar">&times;</button></div>
             <div class="table-container" style="max-height: 50vh; overflow-y: auto; margin-top: 15px;">
                 <table style="width: 100%;">
                     <thead><tr><th>Área</th><th>Projeto</th><th>Tarefa</th><th>Prazo Final</th><th>Responsáveis</th><th>Status</th></tr></thead>
@@ -224,31 +365,46 @@
         </div>
     </div>
 
-    <div id="taskModal" class="modal">
+    <div id="taskModal" class="modal" role="dialog" aria-modal="true">
         <div class="modal-content shadow" style="max-width: 750px;">
-            <div class="modal-header"><h3>Gestão da Demanda</h3><button onclick="closeModal()" class="close-btn">&times;</button></div>
-            
+            <div class="modal-header"><h3>Gestão da Demanda</h3><button onclick="closeModal()" class="close-btn" aria-label="Fechar">&times;</button></div>
+
             <div class="form-grid">
                 <div class="form-group"><label>Área (Somente Leitura)</label><input type="text" id="editArea" disabled class="readonly-field"></div>
                 <div class="form-group"><label>Projeto (Somente Leitura)</label><input type="text" id="editProject" disabled class="readonly-field"></div>
             </div>
-            
+
             <div class="form-group"><label>Título da Demanda</label><input type="text" id="editTitle"></div>
             <div class="form-group"><label>Escopo Original</label><textarea id="editDesc" rows="3" readonly class="readonly-field"></textarea></div>
-            
+
             <div class="form-grid">
                 <div class="form-group"><label>Início</label><input type="date" id="editDateStart"></div>
                 <div class="form-group"><label>Prazo</label><input type="date" id="editDateEnd"></div>
             </div>
-            
+
+            <div class="form-group" id="editPriorityGroup">
+                <label>Prioridade Estratégica</label>
+                <div class="priority-toggle">
+                    <label><input type="radio" name="prioridadeEdit" value="alta"><span class="priority-pill prio-alta">Alta</span></label>
+                    <label><input type="radio" name="prioridadeEdit" value="media"><span class="priority-pill prio-media">Média</span></label>
+                    <label><input type="radio" name="prioridadeEdit" value="baixa"><span class="priority-pill prio-baixa">Baixa</span></label>
+                </div>
+            </div>
+
             <button id="btn-interact" class="btn-primary" style="width: 100%; margin: 15px 0; font-size: 14px; padding: 12px; background-color: #0f172a;" onclick="revealInteractionPanel()">⚡ INTERAGIR COM A DEMANDA</button>
 
             <div id="interaction-panel" style="display: none; background: #eff6ff; padding: 15px; border: 1px solid #bfdbfe; border-radius: 6px; margin-top: 10px;">
-                
+                <button id="btn-ai-analise" class="btn-ai-inline" onclick="solicitarAnaliseIA()" style="display:none;">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M13 2.05V5.08C16.39 5.57 19 8.47 19 12S16.39 18.43 13 18.92V21.95C18.05 21.45 22 17.19 22 12S18.05 2.55 13 2.05M11 4.07V7.1C9.67 7.42 8.5 8.16 7.6 9.21L5.43 7.04C6.94 5.51 8.84 4.42 11 4.07M5.43 16.96L7.6 14.79C8.5 15.84 9.67 16.58 11 16.9V19.93C8.84 19.58 6.94 18.49 5.43 16.96M2.05 11C2.42 8.84 3.51 6.94 5.04 5.43L7.21 7.6C6.16 8.5 5.42 9.67 5.1 11H2.05M5.1 13C5.42 14.33 6.16 15.5 7.21 16.4L5.04 18.57C3.51 17.06 2.42 15.16 2.05 13H5.1Z"/></svg>
+                    ANALISAR COM IA
+                </button>
+
                 <div class="history-section" style="margin-bottom: 15px;">
                     <label style="color: #1e3a8a; font-weight: bold;">Linha do Tempo / Reports Passados</label>
                     <div id="modalHistorico" class="history-box" style="background: #ffffff; max-height: 180px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 10px; overflow-y: auto;"></div>
                 </div>
+
+                <div id="ai-analise-box" style="display:none;"></div>
 
                 <hr style="margin: 15px 0; border: 0; border-top: 1px solid #bfdbfe;">
 
@@ -266,23 +422,104 @@
                     <label style="color: #334155; font-weight: bold;">Seu Novo Reporte (Opcional)</label>
                     <textarea id="newReport" rows="2" placeholder="O que você avançou ou qual é o impedimento agora?"></textarea>
                 </div>
-                
+
                 <div class="form-group" id="gestor-equipe-panel">
                     <label style="color: #000;">Equipe Alocada (Gestão)</label>
                     <div id="edit-responsaveis-container"></div>
-                    <button onclick="addResponsavelField('edit-responsaveis-container')" class="btn-secondary" id="btn-add-edit-resp" style="margin-top: 5px; padding: 5px 10px; font-size: 11px;">➕ Adicionar Outro Envolvido (Clonar Demanda)</button>
+                    <button onclick="addResponsavelField('edit-responsaveis-container')" class="btn-secondary" id="btn-add-edit-resp" style="margin-top: 5px; padding: 5px 10px; font-size: 11px;">+ Adicionar Outro Envolvido (Clonar Demanda)</button>
                 </div>
-
             </div>
 
             <div class="modal-footer" id="modal-action-footer" style="display: none; margin-top: 15px;">
                 <button onclick="saveModalChanges()" class="btn-primary" style="flex: 2;">SALVAR E FECHAR</button>
                 <button onclick="duplicarTask()" id="btn-duplicar-task" class="btn-secondary" style="flex: 1;">CLONAR</button>
+                <button onclick="cobrarComIA()" id="btn-cobrar-ia" class="btn-secondary" style="flex: 1; display:none;">COBRAR (IA)</button>
                 <button onclick="deleteTask()" id="btn-delete-task" class="btn-danger" style="flex: 1;">EXCLUIR</button>
             </div>
         </div>
     </div>
 
+    <!-- ===================== MODAL CADASTRO POR VOZ ===================== -->
+    <div id="vozModal" class="modal" role="dialog" aria-modal="true">
+        <div class="modal-content shadow" style="max-width: 600px;">
+            <div class="modal-header"><h3>Cadastro por Voz</h3><button onclick="fecharCadastroVoz()" class="close-btn" aria-label="Fechar">&times;</button></div>
+
+            <div class="voz-instrucao">
+                <p><strong>Fale como se estivesse pedindo para um assistente:</strong></p>
+                <p class="voz-exemplo">"Cria uma demanda na área Comercial, projeto Renovação Cliente X, tarefa de revisar o contrato e enviar até sexta, responsável João como executor e Paulo como gestor."</p>
+            </div>
+
+            <div class="voz-mic-area">
+                <button id="vozMicBtn" class="voz-mic-btn" onclick="alternarGravacao()" aria-label="Gravar áudio">
+                    <svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor"><path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 006 6.92V21h2v-3.08A7 7 0 0019 11h-2z"/></svg>
+                </button>
+                <p id="vozStatus" class="voz-status">Toque no microfone para começar.</p>
+            </div>
+
+            <div class="form-group">
+                <label>Transcrição (você pode editar)</label>
+                <textarea id="vozTranscricao" rows="3" placeholder="O que você falou aparecerá aqui..."></textarea>
+            </div>
+
+            <div id="vozPreview" class="voz-preview" style="display:none;"></div>
+
+            <div class="modal-footer" style="margin-top: 15px;">
+                <button onclick="fecharCadastroVoz()" class="btn-secondary" style="flex:1;">CANCELAR</button>
+                <button id="vozAnalisarBtn" onclick="analisarTranscricaoIA()" class="btn-primary" style="flex:2;">ANALISAR COM VETOR IA</button>
+                <button id="vozConfirmarBtn" onclick="confirmarCadastroVoz()" class="btn-primary" style="flex:2; display:none; background:#10b981;">CONFIRMAR E SALVAR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== MEU PERFIL ===================== -->
+    <div id="perfilModal" class="modal" role="dialog" aria-modal="true">
+        <div class="modal-content shadow" style="max-width: 480px;">
+            <div class="modal-header"><h3>Meu Perfil</h3><button onclick="fecharMeuPerfil()" class="close-btn" aria-label="Fechar">&times;</button></div>
+            <div class="form-group">
+                <label>Nome</label>
+                <input type="text" id="perfilNome" disabled class="readonly-field">
+            </div>
+            <div class="form-group">
+                <label>E-mail</label>
+                <input type="email" id="perfilEmail" disabled class="readonly-field">
+            </div>
+            <div class="form-group">
+                <label>WhatsApp <span style="font-weight:400; color:#64748b;">(opcional, com DDI)</span></label>
+                <input type="tel" id="perfilTelefone" placeholder="+55 11 99999-9999">
+                <p style="font-size: 11px; color: #64748b; margin-top: 6px;">Cadastre seu WhatsApp para receber cobranças, briefings e alertas pelo aplicativo. Use o formato internacional, com DDI 55 para Brasil.</p>
+            </div>
+            <div class="modal-footer" style="margin-top: 18px;">
+                <button onclick="fecharMeuPerfil()" class="btn-secondary" style="flex:1;">CANCELAR</button>
+                <button onclick="salvarMeuPerfil()" class="btn-primary" style="flex:2;">SALVAR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== DRAWER VETOR IA ===================== -->
+    <aside id="vetorIADrawer" class="ia-drawer" aria-label="Vetor IA">
+        <header class="ia-header">
+            <div class="ia-title">
+                <svg viewBox="0 0 100 100" width="20" height="20" aria-hidden="true">
+                    <polygon points="10,90 90,50 10,10 30,50" fill="#2563eb"/>
+                </svg>
+                <span>VETOR IA</span>
+            </div>
+            <button onclick="toggleVetorIA()" class="close-btn" aria-label="Fechar Vetor IA">&times;</button>
+        </header>
+        <div class="ia-quickactions">
+            <button onclick="iaPedirBriefing()" class="ia-action">📊 Briefing do dia</button>
+            <button onclick="iaListarSobrecarregados()" class="ia-action">👥 Quem está sobrecarregado</button>
+            <button onclick="iaCobrancasPendentes()" class="ia-action">📨 Cobranças pendentes</button>
+        </div>
+        <div id="iaConversa" class="ia-chat"></div>
+        <footer class="ia-footer">
+            <textarea id="iaInput" placeholder="Pergunte ou peça uma ação. Ex: 'Cadastra tarefa para Maria sobre revisão até sexta'" rows="2" onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();iaEnviar();}"></textarea>
+            <button onclick="iaEnviar()" class="btn-primary" id="iaEnviarBtn">ENVIAR</button>
+        </footer>
+    </aside>
+    <div id="vetorIABackdrop" class="ia-backdrop" onclick="toggleVetorIA()"></div>
+
+    <!-- ===================== FIREBASE INIT ===================== -->
     <script>
         const firebaseConfig = {
             apiKey: "AIzaSyC4utmTe19lRJdOJutVmJAdhkfeu4znkpI",
@@ -296,6 +533,7 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         const auth = firebase.auth();
+        const functions = firebase.functions();
     </script>
     <script src="script.js"></script>
 </body>
