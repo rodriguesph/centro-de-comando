@@ -578,7 +578,9 @@
     <script>
         const firebaseConfig = {
             apiKey: "AIzaSyC4utmTe19lRJdOJutVmJAdhkfeu4znkpI",
-            authDomain: "centrodecomando-paulo.firebaseapp.com",
+            // authDomain aponta para o próprio Vercel — auth handler espelhado via vercel.json.
+            // Isso resolve storage partitioning em iOS Safari e similares.
+            authDomain: "centro-de-comando-kappa.vercel.app",
             projectId: "centrodecomando-paulo",
             storageBucket: "centrodecomando-paulo.firebasestorage.app",
             messagingSenderId: "949266387673",

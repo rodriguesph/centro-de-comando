@@ -1742,6 +1742,7 @@ async function confirmarCadastroVoz() {
     }
     try {
         const batch = db.batch();
+        const destinatarios = [];
         for (const r of p.responsaveis) {
             const u = allUsers.find(x => x.email === r.email);
             if (!u) { toast(`Usuário ${r.email} não encontrado.`, 'warning'); continue; }
@@ -1756,8 +1757,27 @@ async function confirmarCadastroVoz() {
                 historico: [{ data: new Date().toLocaleString('pt-BR'), autor: 'SISTEMA', texto: 'Cadastrada via voz + Vetor IA.' }],
                 email: u.email, criadoPor: currentUserEmail
             });
+            destinatarios.push(u.email);
         }
         await batch.commit();
+
+        // Notificação multi-canal (e-mail + WhatsApp se cadastrado)
+        if (destinatarios.length > 0) {
+            try {
+                const fn = functions.httpsCallable('sendNotification');
+                await fn({
+                    destinatarios,
+                    tipo: 'NOVA DEMANDA',
+                    saudacao: '',
+                    mensagem: `Você foi atribuído a uma nova demanda no Vetor (cadastrada por voz):\n\n` +
+                              `**${p.titulo}**\nProjeto: ${p.projeto}\nÁrea: ${p.area}\n` +
+                              `Início: ${p.data_inicio} | Prazo: ${p.data_fim}\n\n` +
+                              (p.escopo ? `Escopo: ${p.escopo}\n\n` : '') +
+                              `Acesse o Vetor para ver os detalhes.`
+                });
+            } catch (e) { console.warn('Notificação não enviada:', e); }
+        }
+
         toast('Demanda cadastrada por voz.', 'success');
         fecharCadastroVoz();
     } catch (e) {
@@ -1890,6 +1910,19 @@ async function executarAcoesIA(acoes) {
                     historico: [{ data: new Date().toLocaleString('pt-BR'), autor: 'SISTEMA', texto: 'Cadastrada via Vetor IA.' }],
                     email: u.email, criadoPor: currentUserEmail
                 });
+                // Notificação multi-canal
+                try {
+                    const fn = functions.httpsCallable('sendNotification');
+                    await fn({
+                        destinatarios: [u.email],
+                        tipo: 'NOVA DEMANDA',
+                        saudacao: '',
+                        mensagem: `Você foi atribuído a uma nova demanda no Vetor (criada via assistente de IA):\n\n` +
+                                  `**${p.titulo}**\nProjeto: ${p.projeto}\nÁrea: ${p.area}\n` +
+                                  `Início: ${p.data_inicio} | Prazo: ${p.data_fim}\n\n` +
+                                  `Acesse o Vetor para ver os detalhes.`
+                    });
+                } catch (notifErr) { console.warn('Notificação não enviada:', notifErr); }
                 toast('Demanda criada via Vetor IA.', 'success');
             } else if (a.tipo === 'enviar_cobranca') {
                 // Disparar Cloud Function para envio personalizado por IA
