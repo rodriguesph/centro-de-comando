@@ -118,6 +118,9 @@ function showSection(sec) {
     if (sec === 'admin') renderAdminPanel();
     if (sec === 'busca') executarBusca();
     if (sec === 'arquivo') renderArquivo();
+
+    // Fechar menus abertos ao trocar de aba
+    if (typeof fecharMobileMenu === 'function') fecharMobileMenu();
 }
 
 function updateNavVisibility() {
@@ -129,15 +132,55 @@ function updateNavVisibility() {
     document.getElementById('btn-nav-bi').style.display = 'inline-block';
     document.getElementById('btn-nav-novo').style.display = temPoder ? 'inline-block' : 'none';
     document.getElementById('btn-nav-voz').style.display = temPoder ? 'inline-flex' : 'none';
-    document.getElementById('btn-nav-arquivo').style.display = temPoder ? 'inline-block' : 'none';
-    document.getElementById('btn-nav-usuarios').style.display = isSuperAdmin ? 'inline-block' : 'none';
-    document.getElementById('btn-nav-admin').style.display = isSuperAdmin ? 'inline-block' : 'none';
+
+    // Esses 3 ficam sempre escondidos do nav principal — acessados pelo menu de configurações.
+    document.getElementById('btn-nav-arquivo').style.display = 'none';
+    document.getElementById('btn-nav-usuarios').style.display = 'none';
+    document.getElementById('btn-nav-admin').style.display = 'none';
+
+    // Itens do dropdown de configurações:
+    document.getElementById('config-equipe').style.display = isSuperAdmin ? 'flex' : 'none';
+    document.getElementById('config-admin').style.display = isSuperAdmin ? 'flex' : 'none';
 
     const currentActive = document.querySelector('.content-section.active')?.id;
     if (!temPoder && (currentActive === 'sec-novo-projeto' || currentActive === 'sec-admin' || currentActive === 'sec-usuarios')) {
         showSection('hoje');
     }
 }
+
+// ==========================================================================
+// MENU MOBILE (hamburger) E DROPDOWN DE CONFIGURAÇÕES
+// ==========================================================================
+function toggleMobileMenu() {
+    const nav = document.querySelector('.main-nav');
+    if (!nav) return;
+    nav.classList.toggle('mobile-open');
+}
+
+function fecharMobileMenu() {
+    const nav = document.querySelector('.main-nav');
+    if (nav) nav.classList.remove('mobile-open');
+}
+
+function toggleConfigMenu(ev) {
+    if (ev) ev.stopPropagation();
+    const dd = document.getElementById('config-menu-dropdown');
+    if (!dd) return;
+    dd.classList.toggle('open');
+}
+
+function fecharConfigMenu() {
+    const dd = document.getElementById('config-menu-dropdown');
+    if (dd) dd.classList.remove('open');
+}
+
+// Fecha config dropdown ao clicar fora
+document.addEventListener('click', (e) => {
+    const dd = document.getElementById('config-menu-dropdown');
+    if (!dd || !dd.classList.contains('open')) return;
+    if (e.target.closest('#config-menu-dropdown') || e.target.closest('#btn-config-menu')) return;
+    dd.classList.remove('open');
+});
 
 // ==========================================================================
 // 2. AUTENTICAÇÃO E CARGA
@@ -979,6 +1022,11 @@ function abrirModal(id) {
 
     document.getElementById('editArea').value = t.area || "Sem Área";
     document.getElementById('editProject').value = t.project || "Sem Projeto";
+    // Pills no header do modal (substituem os campos readonly antigos)
+    const areaPill = document.getElementById('modal-area-pill');
+    const projPill = document.getElementById('modal-project-pill');
+    if (areaPill) areaPill.textContent = t.area || "Sem Área";
+    if (projPill) projPill.textContent = t.project || "Sem Projeto";
 
     document.getElementById('editTitle').value = t.text;
     document.getElementById('editTitle').disabled = !isGestorPleno;
@@ -1818,7 +1866,7 @@ function iaAddBotMsg(t, isAction = false) {
     const c = document.getElementById('iaConversa');
     const div = document.createElement('div');
     div.className = 'ia-msg ia-msg-bot' + (isAction ? ' ia-msg-action' : '');
-    div.innerHTML = '<strong>VETOR IA</strong>' + iaFormat(t);
+    div.innerHTML = '<strong class="ia-tag">VETOR IA</strong><div class="ia-body">' + iaFormat(t) + '</div>';
     c.appendChild(div); c.scrollTop = c.scrollHeight;
     iaConversation.push({ role: 'assistant', content: t });
 }
@@ -1834,9 +1882,92 @@ function iaRemoveLoading() {
     const el = document.getElementById('ia-loading');
     if (el) el.remove();
 }
+// Renderizador Markdown leve para respostas da Vetor IA.
+// Suporta: ## H3, ### H4, **bold**, *italic*, `code`, listas (- ou •),
+// tabelas | a | b |, separadores ---, parágrafos.
 function iaFormat(t) {
-    // Bold simples **texto**
-    return escapeHtml(t).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+    if (!t) return '';
+    const lines = String(t).split('\n');
+    let html = '';
+    let i = 0;
+
+    function inlineFormat(line) {
+        return escapeHtml(line)
+            .replace(/`([^`]+)`/g, '<code class="ia-code">$1</code>')
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    }
+
+    while (i < lines.length) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        // Linha em branco — separador de parágrafo
+        if (!trimmed) { i++; continue; }
+
+        // Separador horizontal
+        if (/^---+$/.test(trimmed)) { html += '<hr class="ia-hr">'; i++; continue; }
+
+        // Headers
+        if (/^####\s+/.test(trimmed)) { html += `<div class="ia-h4">${inlineFormat(trimmed.replace(/^####\s+/, ''))}</div>`; i++; continue; }
+        if (/^###\s+/.test(trimmed)) { html += `<div class="ia-h3">${inlineFormat(trimmed.replace(/^###\s+/, ''))}</div>`; i++; continue; }
+        if (/^##\s+/.test(trimmed)) { html += `<div class="ia-h2">${inlineFormat(trimmed.replace(/^##\s+/, ''))}</div>`; i++; continue; }
+
+        // Tabela: linha começando e terminando com | e próxima linha de separador |---|---|
+        if (/^\|.+\|$/.test(trimmed) && i + 1 < lines.length && /^\|[\s\-:|]+\|$/.test(lines[i + 1].trim())) {
+            const headerCells = trimmed.slice(1, -1).split('|').map(c => c.trim());
+            i += 2; // pular header e separador
+            const rows = [];
+            while (i < lines.length && /^\|.+\|$/.test(lines[i].trim())) {
+                rows.push(lines[i].trim().slice(1, -1).split('|').map(c => c.trim()));
+                i++;
+            }
+            html += '<table class="ia-table"><thead><tr>';
+            headerCells.forEach(c => { html += `<th>${inlineFormat(c)}</th>`; });
+            html += '</tr></thead><tbody>';
+            rows.forEach(r => {
+                html += '<tr>';
+                r.forEach(c => { html += `<td>${inlineFormat(c)}</td>`; });
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            continue;
+        }
+
+        // Lista com bullets (- ou •)
+        if (/^[-•]\s+/.test(trimmed)) {
+            html += '<ul class="ia-list">';
+            while (i < lines.length && /^[-•]\s+/.test(lines[i].trim())) {
+                html += `<li>${inlineFormat(lines[i].trim().replace(/^[-•]\s+/, ''))}</li>`;
+                i++;
+            }
+            html += '</ul>';
+            continue;
+        }
+
+        // Lista numerada
+        if (/^\d+\.\s+/.test(trimmed)) {
+            html += '<ol class="ia-list">';
+            while (i < lines.length && /^\d+\.\s+/.test(lines[i].trim())) {
+                html += `<li>${inlineFormat(lines[i].trim().replace(/^\d+\.\s+/, ''))}</li>`;
+                i++;
+            }
+            html += '</ol>';
+            continue;
+        }
+
+        // Parágrafo: agrupa linhas consecutivas até linha em branco
+        let para = inlineFormat(trimmed);
+        i++;
+        while (i < lines.length && lines[i].trim() && !/^(#|---|\||[-•]\s|\d+\.\s)/.test(lines[i].trim())) {
+            para += '<br>' + inlineFormat(lines[i].trim());
+            i++;
+        }
+        html += `<p class="ia-p">${para}</p>`;
+    }
+
+    return html;
 }
 
 async function iaEnviar() {

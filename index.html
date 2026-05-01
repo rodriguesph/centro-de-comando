@@ -56,6 +56,9 @@
 
         <header class="main-header">
             <div class="header-container">
+                <button id="btn-mobile-menu" class="btn-hamburger" onclick="toggleMobileMenu()" aria-label="Abrir menu">
+                    <span></span><span></span><span></span>
+                </button>
                 <div class="vetor-logo" aria-label="Vetor — Direção e Magnitude">
                     <svg viewBox="0 0 100 100" width="28" height="28" aria-hidden="true">
                         <polygon points="10,90 90,50 10,10 30,50" fill="#2563eb"/>
@@ -63,14 +66,42 @@
                     <span class="logo-text">VETOR</span>
                 </div>
                 <div class="user-control">
-                    <button id="btn-vetor-ia" class="btn-ia" title="Abrir o assistente Vetor IA" onclick="toggleVetorIA()">
+                    <button id="btn-vetor-ia" class="btn-ia hide-on-mobile" title="Abrir o assistente Vetor IA" onclick="toggleVetorIA()">
                         <span class="ia-pulse"></span>VETOR IA
                     </button>
+                    <button id="btn-config-menu" class="btn-config hide-on-mobile" onclick="toggleConfigMenu(event)" aria-label="Configurações" title="Mais opções">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+                    </button>
                     <span id="saudacao" class="user-email" onclick="abrirMeuPerfil()" title="Editar meu perfil" style="cursor:pointer;">Autenticando...</span>
-                    <button onclick="logout()" class="btn-secondary">Sair</button>
+                    <button onclick="logout()" class="btn-secondary hide-on-mobile">Sair</button>
                 </div>
             </div>
+
+            <!-- Menu de configurações (engrenagem) -->
+            <div id="config-menu-dropdown" class="config-dropdown shadow">
+                <button class="config-item" onclick="showSection('arquivo'); fecharConfigMenu();">
+                    <span class="config-icon">📦</span>Arquivo
+                </button>
+                <button class="config-item" id="config-equipe" onclick="showSection('usuarios'); fecharConfigMenu();" style="display:none;">
+                    <span class="config-icon">👥</span>Equipe
+                </button>
+                <button class="config-item" id="config-admin" onclick="showSection('admin'); fecharConfigMenu();" style="display:none;">
+                    <span class="config-icon">⚙️</span>Administração
+                </button>
+                <hr class="config-divider">
+                <button class="config-item" onclick="abrirMeuPerfil(); fecharConfigMenu();">
+                    <span class="config-icon">👤</span>Meu Perfil
+                </button>
+                <button class="config-item config-item-danger" onclick="logout()">
+                    <span class="config-icon">↪</span>Sair
+                </button>
+            </div>
         </header>
+
+        <!-- FAB Vetor IA (visível só em mobile) -->
+        <button id="fab-vetor-ia" class="fab-vetor-ia" onclick="toggleVetorIA()" aria-label="Abrir Vetor IA">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93C7.05 19.44 4 16.08 4 12c0-.61.08-1.21.21-1.78L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+        </button>
 
         <nav class="main-nav">
             <div class="nav-container">
@@ -389,29 +420,44 @@
 
     <div id="taskModal" class="modal" role="dialog" aria-modal="true">
         <div class="modal-content shadow" style="max-width: 750px;">
-            <div class="modal-header"><h3>Gestão da Demanda</h3><button onclick="closeModal()" class="close-btn" aria-label="Fechar">&times;</button></div>
-
-            <div class="form-grid">
-                <div class="form-group"><label>Área (Somente Leitura)</label><input type="text" id="editArea" disabled class="readonly-field"></div>
-                <div class="form-group"><label>Projeto (Somente Leitura)</label><input type="text" id="editProject" disabled class="readonly-field"></div>
+            <div class="modal-header">
+                <div>
+                    <h3>Gestão da Demanda</h3>
+                    <div class="modal-subtitle"><span id="modal-area-pill"></span> · <span id="modal-project-pill"></span></div>
+                </div>
+                <button onclick="closeModal()" class="close-btn" aria-label="Fechar">&times;</button>
             </div>
 
+            <!-- Campos ocultos para compatibilidade com JS atual -->
+            <input type="hidden" id="editArea">
+            <input type="hidden" id="editProject">
+
+            <!-- ESSENCIAIS: sempre visíveis -->
             <div class="form-group"><label>Título da Demanda</label><input type="text" id="editTitle"></div>
-            <div class="form-group"><label>Escopo Original</label><textarea id="editDesc" rows="3" readonly class="readonly-field"></textarea></div>
 
             <div class="form-grid">
                 <div class="form-group"><label>Início</label><input type="date" id="editDateStart"></div>
                 <div class="form-group"><label>Prazo</label><input type="date" id="editDateEnd"></div>
             </div>
 
-            <div class="form-group" id="editPriorityGroup">
-                <label>Prioridade Estratégica</label>
-                <div class="priority-toggle">
-                    <label><input type="radio" name="prioridadeEdit" value="alta"><span class="priority-pill prio-alta">Alta</span></label>
-                    <label><input type="radio" name="prioridadeEdit" value="media"><span class="priority-pill prio-media">Média</span></label>
-                    <label><input type="radio" name="prioridadeEdit" value="baixa"><span class="priority-pill prio-baixa">Baixa</span></label>
+            <!-- DETALHES: accordion colapsado por padrão -->
+            <details class="modal-accordion">
+                <summary class="modal-accordion-summary">
+                    <span>Mais detalhes (escopo, prioridade)</span>
+                    <span class="modal-accordion-icon">▾</span>
+                </summary>
+                <div class="modal-accordion-body">
+                    <div class="form-group"><label>Escopo Original</label><textarea id="editDesc" rows="3" readonly class="readonly-field"></textarea></div>
+                    <div class="form-group" id="editPriorityGroup">
+                        <label>Prioridade Estratégica</label>
+                        <div class="priority-toggle">
+                            <label><input type="radio" name="prioridadeEdit" value="alta"><span class="priority-pill prio-alta">Alta</span></label>
+                            <label><input type="radio" name="prioridadeEdit" value="media"><span class="priority-pill prio-media">Média</span></label>
+                            <label><input type="radio" name="prioridadeEdit" value="baixa"><span class="priority-pill prio-baixa">Baixa</span></label>
+                        </div>
+                    </div>
                 </div>
-            </div>
+            </details>
 
             <button id="btn-interact" class="btn-primary" style="width: 100%; margin: 15px 0; font-size: 14px; padding: 12px; background-color: #0f172a;" onclick="revealInteractionPanel()">⚡ INTERAGIR COM A DEMANDA</button>
 
