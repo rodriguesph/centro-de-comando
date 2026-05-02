@@ -419,7 +419,7 @@
     </div>
 
     <div id="taskModal" class="modal" role="dialog" aria-modal="true">
-        <div class="modal-content shadow" style="max-width: 750px;">
+        <div class="modal-content modal-task shadow">
             <div class="modal-header">
                 <div>
                     <h3>Gestão da Demanda</h3>
@@ -428,25 +428,55 @@
                 <button onclick="closeModal()" class="close-btn" aria-label="Fechar">&times;</button>
             </div>
 
-            <!-- Campos ocultos para compatibilidade com JS atual -->
+            <!-- Campos ocultos para compatibilidade -->
             <input type="hidden" id="editArea">
             <input type="hidden" id="editProject">
 
-            <!-- ESSENCIAIS: sempre visíveis -->
-            <div class="form-group"><label>Título da Demanda</label><input type="text" id="editTitle"></div>
+            <!-- ESSENCIAIS: sempre visíveis no topo -->
+            <div class="task-essentials">
+                <div class="form-group"><label>Título da Demanda</label><input type="text" id="editTitle"></div>
 
-            <div class="form-grid">
-                <div class="form-group"><label>Início</label><input type="date" id="editDateStart"></div>
-                <div class="form-group"><label>Prazo</label><input type="date" id="editDateEnd"></div>
+                <div class="task-essentials-row">
+                    <div class="form-group"><label>Início</label><input type="date" id="editDateStart"></div>
+                    <div class="form-group"><label>Prazo</label><input type="date" id="editDateEnd"></div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select id="editStatus" class="task-status-select">
+                            <option value="fazer">Não Iniciada</option>
+                            <option value="andamento">Em Execução</option>
+                            <option value="aprovacao">Aguardando Validação</option>
+                            <option value="concluido" id="opt-concluido" style="display:none;">Concluída</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group" id="gestor-equipe-panel">
+                    <label>Equipe Alocada</label>
+                    <div id="edit-responsaveis-container"></div>
+                    <button onclick="addResponsavelField('edit-responsaveis-container')" class="btn-secondary" id="btn-add-edit-resp" style="margin-top: 5px; padding: 5px 10px; font-size: 11px;">+ Adicionar Envolvido</button>
+                </div>
             </div>
 
-            <!-- DETALHES: accordion colapsado por padrão -->
-            <details class="modal-accordion">
-                <summary class="modal-accordion-summary">
-                    <span>Mais detalhes (escopo, prioridade)</span>
-                    <span class="modal-accordion-icon">▾</span>
-                </summary>
-                <div class="modal-accordion-body">
+            <!-- TABS -->
+            <nav class="task-tabs" role="tablist">
+                <button class="task-tab active" data-tab="detalhes" onclick="switchTaskTab('detalhes')">Detalhes</button>
+                <button class="task-tab" data-tab="subtarefas" onclick="switchTaskTab('subtarefas')">
+                    Subtarefas<span class="task-tab-count" id="tab-count-subtarefas"></span>
+                </button>
+                <button class="task-tab" data-tab="dependencias" onclick="switchTaskTab('dependencias')">
+                    Dependências<span class="task-tab-count" id="tab-count-dependencias"></span>
+                </button>
+                <button class="task-tab" data-tab="links" onclick="switchTaskTab('links')">
+                    Links<span class="task-tab-count" id="tab-count-links"></span>
+                </button>
+                <button class="task-tab" data-tab="atividade" onclick="switchTaskTab('atividade')">
+                    Atividade<span class="task-tab-count" id="tab-count-atividade"></span>
+                </button>
+            </nav>
+
+            <div class="task-tab-content">
+                <!-- TAB: DETALHES -->
+                <div class="task-tab-pane active" data-tab="detalhes">
                     <div class="form-group"><label>Escopo Original</label><textarea id="editDesc" rows="3" readonly class="readonly-field"></textarea></div>
                     <div class="form-group" id="editPriorityGroup">
                         <label>Prioridade Estratégica</label>
@@ -456,31 +486,20 @@
                             <label><input type="radio" name="prioridadeEdit" value="baixa"><span class="priority-pill prio-baixa">Baixa</span></label>
                         </div>
                     </div>
+                    <div id="ai-analise-box" style="display:none;"></div>
                 </div>
-            </details>
 
-            <!-- SUBTAREFAS / CHECKLIST -->
-            <details class="modal-accordion" id="modal-subtarefas">
-                <summary class="modal-accordion-summary">
-                    <span>Subtarefas <span class="modal-accordion-count" id="subtarefas-count"></span></span>
-                    <span class="modal-accordion-icon">▾</span>
-                </summary>
-                <div class="modal-accordion-body">
+                <!-- TAB: SUBTAREFAS -->
+                <div class="task-tab-pane" data-tab="subtarefas">
                     <div id="subtarefas-list" class="subtarefas-list"></div>
                     <div class="subtarefa-add">
                         <input type="text" id="subtarefa-input" placeholder="Adicionar subtarefa..." onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarSubtarefa();}">
                         <button onclick="adicionarSubtarefa()" class="btn-secondary">+ ADICIONAR</button>
                     </div>
                 </div>
-            </details>
 
-            <!-- DEPENDÊNCIAS -->
-            <details class="modal-accordion" id="modal-dependencias">
-                <summary class="modal-accordion-summary">
-                    <span>Dependências <span class="modal-accordion-count" id="dependencias-count"></span></span>
-                    <span class="modal-accordion-icon">▾</span>
-                </summary>
-                <div class="modal-accordion-body">
+                <!-- TAB: DEPENDÊNCIAS -->
+                <div class="task-tab-pane" data-tab="dependencias">
                     <p class="modal-helper">Esta tarefa só pode iniciar quando as tarefas abaixo forem concluídas.</p>
                     <div id="dependencias-list" class="dependencias-list"></div>
                     <div class="dependencia-add">
@@ -488,16 +507,10 @@
                         <button onclick="adicionarDependencia()" class="btn-secondary">+ VINCULAR</button>
                     </div>
                 </div>
-            </details>
 
-            <!-- LINKS DE REFERÊNCIA -->
-            <details class="modal-accordion" id="modal-links">
-                <summary class="modal-accordion-summary">
-                    <span>Links de referência <span class="modal-accordion-count" id="links-count"></span></span>
-                    <span class="modal-accordion-icon">▾</span>
-                </summary>
-                <div class="modal-accordion-body">
-                    <p class="modal-helper">Vincule documentos do Drive, planilhas, referências externas.</p>
+                <!-- TAB: LINKS -->
+                <div class="task-tab-pane" data-tab="links">
+                    <p class="modal-helper">Vincule documentos do Drive, planilhas e referências externas.</p>
                     <div id="links-list" class="links-list"></div>
                     <div class="link-add">
                         <input type="text" id="link-label" placeholder="Rótulo (ex: Plano de ensino)">
@@ -505,76 +518,48 @@
                         <button onclick="adicionarLink()" class="btn-secondary">+ ADICIONAR</button>
                     </div>
                 </div>
-            </details>
 
-            <!-- COMENTÁRIOS -->
-            <details class="modal-accordion" id="modal-comentarios">
-                <summary class="modal-accordion-summary">
-                    <span>Comentários <span class="modal-accordion-count" id="comentarios-count"></span></span>
-                    <span class="modal-accordion-icon">▾</span>
-                </summary>
-                <div class="modal-accordion-body">
-                    <div id="comentarios-list" class="comentarios-list"></div>
-                    <div class="comentario-add">
-                        <textarea id="comentario-input" placeholder="Escrever comentário... use @ para mencionar alguém" rows="2"></textarea>
-                        <div id="comentario-mention-suggestions" class="mention-suggestions"></div>
-                        <button onclick="adicionarComentario()" class="btn-primary">PUBLICAR COMENTÁRIO</button>
+                <!-- TAB: ATIVIDADE (timeline unificada de comentários, reports e sistema) -->
+                <div class="task-tab-pane" data-tab="atividade">
+                    <div id="timeline-list" class="timeline-list"></div>
+                    <div class="atividade-add">
+                        <textarea id="atividade-input" placeholder="Escrever comentário, reporte de progresso ou impedimento. Use @ para mencionar." rows="3"></textarea>
+                        <div id="mention-dropdown" class="mention-dropdown"></div>
+                        <div class="atividade-controls">
+                            <label class="atividade-status-toggle">
+                                <input type="checkbox" id="atividade-update-status">
+                                <span>Atualizar status nesta publicação</span>
+                            </label>
+                            <select id="atividade-novo-status" disabled>
+                                <option value="fazer">Não Iniciada</option>
+                                <option value="andamento">Em Execução</option>
+                                <option value="aprovacao">Aguardando Validação</option>
+                                <option value="concluido" id="atividade-opt-concluido" style="display:none;">Concluída</option>
+                            </select>
+                            <button onclick="publicarAtividade()" class="btn-primary atividade-publicar">PUBLICAR</button>
+                        </div>
                     </div>
                 </div>
-            </details>
-
-            <!-- BOTÃO MODO FOCO -->
-            <div class="modo-foco-launcher">
-                <button onclick="abrirModoFoco()" class="btn-foco">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
-                    INICIAR MODO FOCO
-                </button>
             </div>
 
-            <button id="btn-interact" class="btn-primary" style="width: 100%; margin: 15px 0; font-size: 14px; padding: 12px; background-color: #0f172a;" onclick="revealInteractionPanel()">⚡ INTERAGIR COM A DEMANDA</button>
-
-            <div id="interaction-panel" style="display: none; background: #eff6ff; padding: 15px; border: 1px solid #bfdbfe; border-radius: 6px; margin-top: 10px;">
+            <!-- FERRAMENTAS (modo foco + IA) -->
+            <div class="task-tools">
+                <button onclick="abrirModoFoco()" class="btn-foco-compact" title="Iniciar Modo Foco">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm.5 5H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+                    Modo Foco
+                </button>
                 <button id="btn-ai-analise" class="btn-ai-inline" onclick="solicitarAnaliseIA()" style="display:none;">
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M13 2.05V5.08C16.39 5.57 19 8.47 19 12S16.39 18.43 13 18.92V21.95C18.05 21.45 22 17.19 22 12S18.05 2.55 13 2.05M11 4.07V7.1C9.67 7.42 8.5 8.16 7.6 9.21L5.43 7.04C6.94 5.51 8.84 4.42 11 4.07M5.43 16.96L7.6 14.79C8.5 15.84 9.67 16.58 11 16.9V19.93C8.84 19.58 6.94 18.49 5.43 16.96M2.05 11C2.42 8.84 3.51 6.94 5.04 5.43L7.21 7.6C6.16 8.5 5.42 9.67 5.1 11H2.05M5.1 13C5.42 14.33 6.16 15.5 7.21 16.4L5.04 18.57C3.51 17.06 2.42 15.16 2.05 13H5.1Z"/></svg>
-                    ANALISAR COM IA
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M13 2.05V5.08C16.39 5.57 19 8.47 19 12S16.39 18.43 13 18.92V21.95C18.05 21.45 22 17.19 22 12S18.05 2.55 13 2.05"/></svg>
+                    Analisar com IA
                 </button>
-
-                <div class="history-section" style="margin-bottom: 15px;">
-                    <label style="color: #1e3a8a; font-weight: bold;">Linha do Tempo / Reports Passados</label>
-                    <div id="modalHistorico" class="history-box" style="background: #ffffff; max-height: 180px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 10px; overflow-y: auto;"></div>
-                </div>
-
-                <div id="ai-analise-box" style="display:none;"></div>
-
-                <hr style="margin: 15px 0; border: 0; border-top: 1px solid #bfdbfe;">
-
-                <div class="form-group">
-                    <label style="color: #0f172a; font-weight: bold;">Atualizar Status da Operação <span style="color: #dc3545; font-size: 10px;">(OBRIGATÓRIO)</span></label>
-                    <select id="editStatus" style="border: 2px solid #3b82f6; font-weight: bold; background: #ffffff;">
-                        <option value="fazer">Não Iniciada</option>
-                        <option value="andamento">Em Execução</option>
-                        <option value="aprovacao">Aguardando Validação</option>
-                        <option value="concluido" id="opt-concluido" style="display:none;">Concluída</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label style="color: #334155; font-weight: bold;">Seu Novo Reporte (Opcional)</label>
-                    <textarea id="newReport" rows="2" placeholder="O que você avançou ou qual é o impedimento agora?"></textarea>
-                </div>
-
-                <div class="form-group" id="gestor-equipe-panel">
-                    <label style="color: #000;">Equipe Alocada (Gestão)</label>
-                    <div id="edit-responsaveis-container"></div>
-                    <button onclick="addResponsavelField('edit-responsaveis-container')" class="btn-secondary" id="btn-add-edit-resp" style="margin-top: 5px; padding: 5px 10px; font-size: 11px;">+ Adicionar Outro Envolvido (Clonar Demanda)</button>
-                </div>
             </div>
 
-            <div class="modal-footer" id="modal-action-footer" style="display: none; margin-top: 15px;">
+            <!-- FOOTER FIXO -->
+            <div class="modal-footer task-modal-footer">
                 <button onclick="saveModalChanges()" class="btn-primary" style="flex: 2;">SALVAR E FECHAR</button>
-                <button onclick="duplicarTask()" id="btn-duplicar-task" class="btn-secondary" style="flex: 1;">CLONAR</button>
-                <button onclick="cobrarComIA()" id="btn-cobrar-ia" class="btn-secondary" style="flex: 1; display:none;">COBRAR (IA)</button>
-                <button onclick="deleteTask()" id="btn-delete-task" class="btn-danger" style="flex: 1;">EXCLUIR</button>
+                <button onclick="duplicarTask()" id="btn-duplicar-task" class="btn-secondary">CLONAR</button>
+                <button onclick="cobrarComIA()" id="btn-cobrar-ia" class="btn-secondary" style="display:none;">COBRAR (IA)</button>
+                <button onclick="deleteTask()" id="btn-delete-task" class="btn-danger">EXCLUIR</button>
             </div>
         </div>
     </div>

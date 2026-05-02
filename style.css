@@ -386,6 +386,194 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--v
 @keyframes toast-out { from { transform: translateX(0); opacity: 1; } to { transform: translateX(120%); opacity: 0; } }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
+/* ===================== MODAL DE DEMANDA — NOVO LAYOUT COM TABS ===================== */
+.modal-task {
+    max-width: 760px !important;
+    padding: 0 !important;
+    display: flex; flex-direction: column;
+    max-height: 92vh;
+}
+.modal-task .modal-header {
+    padding: 22px 28px 16px; margin-bottom: 0;
+    border-bottom: 1px solid var(--border-color);
+}
+.task-essentials {
+    padding: 18px 28px 8px;
+    border-bottom: 1px solid var(--border-color);
+    background: #f8fafc;
+}
+.task-essentials .form-group { margin-bottom: 12px; }
+.task-essentials-row {
+    display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 14px;
+}
+.task-status-select {
+    background: #fff; border: 2px solid var(--vetor-blue) !important;
+    font-weight: 700; color: var(--vetor-blue-dark);
+}
+
+/* Tabs do modal */
+.task-tabs {
+    display: flex; gap: 0; padding: 0 28px;
+    background: #fff;
+    border-bottom: 1px solid var(--border-color);
+    overflow-x: auto; flex-shrink: 0;
+}
+.task-tab {
+    background: none; border: none; padding: 14px 16px;
+    font-family: var(--font-family); font-size: 12px; font-weight: 700;
+    color: var(--text-muted); cursor: pointer;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap; display: flex; align-items: center; gap: 6px;
+}
+.task-tab:hover { color: var(--text-main); }
+.task-tab.active { color: var(--vetor-blue); border-bottom-color: var(--vetor-blue); }
+.task-tab-count {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--vetor-blue-light); color: var(--vetor-blue-dark);
+    font-size: 10px; font-weight: 800; padding: 1px 8px;
+    border-radius: 100px; min-width: 18px;
+}
+.task-tab-count:empty { display: none; }
+.task-tab.active .task-tab-count { background: var(--vetor-blue); color: #fff; }
+
+.task-tab-content { padding: 22px 28px; flex: 1; overflow-y: auto; }
+.task-tab-pane { display: none; }
+.task-tab-pane.active { display: block; animation: fadeIn 0.2s ease; }
+
+/* Footer do modal */
+.task-tools {
+    display: flex; gap: 10px; padding: 12px 28px;
+    border-top: 1px solid var(--border-color);
+    background: #fafbfc; flex-shrink: 0;
+}
+.btn-foco-compact, .btn-ai-inline {
+    background: #fff; border: 1px solid var(--border-color);
+    padding: 8px 14px; font-size: 11px; font-weight: 700;
+    color: var(--text-main); cursor: pointer; border-radius: var(--radius);
+    display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-family);
+    text-transform: uppercase; letter-spacing: 0.5px;
+}
+.btn-foco-compact:hover { border-color: var(--vetor-coral); color: var(--vetor-coral); }
+.btn-ai-inline { background: linear-gradient(135deg, var(--vetor-blue) 0%, var(--vetor-violet) 100%); color: #fff; border: none; }
+.btn-ai-inline:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+
+.task-modal-footer {
+    padding: 14px 28px; border-top: 1px solid var(--border-color);
+    background: #fff; flex-shrink: 0;
+}
+
+/* Atividade unificada — timeline + input */
+.timeline-list {
+    display: flex; flex-direction: column; gap: 10px;
+    max-height: 340px; overflow-y: auto;
+    padding-right: 6px; margin-bottom: 18px;
+}
+.timeline-item {
+    display: flex; gap: 12px; padding: 12px 14px;
+    border-radius: 8px; border: 1px solid var(--border-color);
+    background: #fff;
+}
+.timeline-item-comentario { background: #fff; border-left: 3px solid var(--vetor-blue); }
+.timeline-item-reporte { background: #f8fafc; border-left: 3px solid #10b981; }
+.timeline-item-sistema { background: #fafbfc; border-left: 3px solid #94a3b8; }
+.timeline-item-ia { background: #f5f3ff; border-left: 3px solid var(--vetor-violet); }
+.timeline-icon {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #f1f5f9; color: var(--text-muted);
+    display: flex; align-items: center; justify-content: center;
+    flex: 0 0 auto;
+}
+.timeline-item-comentario .timeline-icon { background: var(--vetor-blue-light); color: var(--vetor-blue); }
+.timeline-item-reporte .timeline-icon { background: #d1fae5; color: #047857; }
+.timeline-item-ia .timeline-icon { background: #ede9fe; color: var(--vetor-violet); }
+.timeline-body { flex: 1; min-width: 0; }
+.timeline-header {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+    flex-wrap: wrap;
+}
+.timeline-tipo {
+    font-size: 10px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--text-main);
+    background: #f1f5f9; padding: 2px 8px; border-radius: 100px;
+}
+.timeline-item-comentario .timeline-tipo { background: var(--vetor-blue-light); color: var(--vetor-blue-dark); }
+.timeline-item-reporte .timeline-tipo { background: #d1fae5; color: #047857; }
+.timeline-item-ia .timeline-tipo { background: #ede9fe; color: var(--vetor-violet); }
+.timeline-autor { font-size: 12px; font-weight: 700; color: var(--text-main); }
+.timeline-data { font-size: 10px; color: var(--text-muted); margin-left: auto; }
+.timeline-texto { font-size: 13px; line-height: 1.55; color: #334155; white-space: pre-wrap; }
+
+/* Input de atividade */
+.atividade-add {
+    position: relative; display: flex; flex-direction: column; gap: 10px;
+    padding: 14px; background: #f8fafc; border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+.atividade-add textarea { resize: vertical; min-height: 64px; background: #fff; }
+.atividade-controls {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+}
+.atividade-status-toggle {
+    display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;
+    color: var(--text-muted);
+}
+.atividade-status-toggle input { width: auto; cursor: pointer; }
+.atividade-controls select {
+    flex: 1; min-width: 160px; padding: 8px 10px; font-size: 12px;
+}
+.atividade-controls select:disabled { opacity: 0.5; }
+.atividade-publicar { margin-left: auto; }
+
+/* Dropdown de menções */
+.mention-dropdown {
+    display: none; position: absolute; top: 100%; left: 14px; right: 14px;
+    background: #fff; border: 1px solid var(--border-color); border-radius: 6px;
+    margin-top: 4px; box-shadow: var(--shadow-lg); z-index: 50;
+    max-height: 240px; overflow-y: auto;
+}
+.mention-dropdown.open { display: block; }
+.mention-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; cursor: pointer; font-size: 13px;
+    border-bottom: 1px solid #f1f5f9;
+}
+.mention-item:last-child { border-bottom: none; }
+.mention-item:hover, .mention-item.active { background: var(--vetor-blue-light); }
+.mention-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--vetor-blue); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 12px; flex: 0 0 auto;
+}
+.mention-info strong { display: block; font-size: 12px; color: var(--text-main); }
+.mention-info small { font-size: 10px; color: var(--text-muted); }
+
+/* Indicadores nos cards (Kanban + Hoje) */
+.card-meta-row {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;
+    padding-top: 8px; border-top: 1px dashed var(--border-color);
+}
+.card-meta-icon {
+    font-size: 10px; font-weight: 700; color: var(--text-muted);
+    background: #f1f5f9; padding: 2px 8px; border-radius: 100px;
+}
+.card-meta-icon.dep-warning { background: #fffbeb; color: #b45309; }
+
+/* Mobile: tabs em scroll horizontal */
+@media (max-width: 768px) {
+    .task-essentials-row { grid-template-columns: 1fr; }
+    .task-tabs { padding: 0 14px; }
+    .task-tab { padding: 12px 10px; font-size: 11px; }
+    .task-tab-content { padding: 16px 14px; }
+    .task-tools, .task-modal-footer { padding: 12px 14px; }
+    .modal-task .modal-header { padding: 18px 14px 12px; }
+    .task-essentials { padding: 14px; }
+    .atividade-controls { flex-direction: column; align-items: stretch; }
+    .atividade-publicar { margin-left: 0; width: 100%; }
+}
+
 /* ===================== SUBTAREFAS, DEPENDÊNCIAS, LINKS, COMENTÁRIOS ===================== */
 .empty-hint {
     font-size: 12px; color: var(--text-muted); font-style: italic;

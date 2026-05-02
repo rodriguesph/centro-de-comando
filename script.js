@@ -298,6 +298,12 @@ function loadDataTasks() {
         if (document.getElementById('sec-arquivo').classList.contains('active')) renderArquivo();
         migrarRespEmails(); // garante resp_emails em tarefas antigas (preparação para Security Rules)
         autoArchiveExpired(); // fallback enquanto Cloud Function não está deployada
+
+        // Real-time: se modal de demanda está aberto, re-renderiza seções dinâmicas
+        if (currentTaskId && document.getElementById('taskModal').classList.contains('active')) {
+            const ttask = allTasks.find(x => x.id === currentTaskId);
+            if (ttask) refreshOpenTaskModal(ttask);
+        }
     }, err => {
         console.error('Erro snapshot tarefas:', err);
         toast('Falha ao sincronizar tarefas.', 'error');
@@ -376,6 +382,7 @@ function renderHojeColuna(listId, countId, tasks) {
                 <span>📅 ${prazo}</span>
                 <span class="status-pill ${cs.class}" style="font-size:9px;">${cs.label}</span>
             </div>
+            ${renderTaskMetaIcons(t)}
         </div>`;
     }).join('');
 }
@@ -999,10 +1006,13 @@ function renderBoard(filteredTasks) {
     board.innerHTML = html;
 }
 
-function revealInteractionPanel() {
-    document.getElementById('btn-interact').style.display = 'none';
-    document.getElementById('interaction-panel').style.display = 'block';
-    document.getElementById('modal-action-footer').style.display = 'flex';
+// Função mantida vazia para compatibilidade — não há mais revelação progressiva.
+function revealInteractionPanel() {}
+
+// Trocar de tab no modal de demanda
+function switchTaskTab(tabName) {
+    document.querySelectorAll('.task-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tabName));
+    document.querySelectorAll('.task-tab-pane').forEach(p => p.classList.toggle('active', p.dataset.tab === tabName));
 }
 
 function abrirModal(id) {
@@ -1012,17 +1022,23 @@ function abrirModal(id) {
     if (!t) return;
     document.getElementById('taskModal').classList.add('active');
 
-    document.getElementById('btn-interact').style.display = 'block';
-    document.getElementById('interaction-panel').style.display = 'none';
-    document.getElementById('modal-action-footer').style.display = 'none';
-    document.getElementById('ai-analise-box').style.display = 'none';
-    document.getElementById('ai-analise-box').innerHTML = '';
+    // Sempre começar na tab Detalhes
+    switchTaskTab('detalhes');
+
+    // Reset campos de IA e atividade
+    const aiBox = document.getElementById('ai-analise-box');
+    if (aiBox) { aiBox.style.display = 'none'; aiBox.innerHTML = ''; }
+    const atvInput = document.getElementById('atividade-input');
+    if (atvInput) atvInput.value = '';
+    const atvUpd = document.getElementById('atividade-update-status');
+    if (atvUpd) atvUpd.checked = false;
+    const atvNovo = document.getElementById('atividade-novo-status');
+    if (atvNovo) atvNovo.disabled = true;
 
     const isGestorPleno = currentUserRole === 'super-admin' || managedAreas.includes(t.area) || managedProjects.includes(t.project);
 
     document.getElementById('editArea').value = t.area || "Sem Área";
     document.getElementById('editProject').value = t.project || "Sem Projeto";
-    // Pills no header do modal (substituem os campos readonly antigos)
     const areaPill = document.getElementById('modal-area-pill');
     const projPill = document.getElementById('modal-project-pill');
     if (areaPill) areaPill.textContent = t.area || "Sem Área";
@@ -1043,51 +1059,238 @@ function abrirModal(id) {
         r.disabled = !isGestorPleno;
     });
 
+    // Status (no header essencial e no select de Atividade)
     const statusSelect = document.getElementById('editStatus');
-    statusSelect.innerHTML = `
+    const baseOptions = `
         <option value="fazer">Não Iniciada</option>
         <option value="andamento">Em Execução</option>
         <option value="aprovacao">Aguardando Validação</option>
     `;
-    if (isGestorPleno || t.status === 'concluido') { statusSelect.innerHTML += `<option value="concluido">Concluída</option>`; }
+    statusSelect.innerHTML = baseOptions + ((isGestorPleno || t.status === 'concluido') ? '<option value="concluido">Concluída</option>' : '');
     statusSelect.value = t.status;
+
+    const atividadeStatus = document.getElementById('atividade-novo-status');
+    if (atividadeStatus) {
+        atividadeStatus.innerHTML = baseOptions + ((isGestorPleno || t.status === 'concluido') ? '<option value="concluido">Concluída</option>' : '');
+        atividadeStatus.value = t.status;
+    }
 
     const containerResps = document.getElementById('edit-responsaveis-container');
     containerResps.innerHTML = '';
     if (t.resps) { t.resps.forEach(r => addResponsavelField('edit-responsaveis-container', r.email, r.papel)); }
 
-    document.getElementById('gestor-equipe-panel').style.display = isGestorPleno ? 'block' : 'none';
     document.getElementById('btn-add-edit-resp').style.display = isGestorPleno ? 'inline-block' : 'none';
     document.querySelectorAll('#edit-responsaveis-container select').forEach(sel => sel.disabled = !isGestorPleno);
     document.querySelectorAll('.btn-remove-resp').forEach(btn => btn.style.display = isGestorPleno ? 'inline-block' : 'none');
 
     document.getElementById('btn-delete-task').style.display = isGestorPleno ? 'inline-block' : 'none';
     document.getElementById('btn-duplicar-task').style.display = isGestorPleno ? 'inline-block' : 'none';
-
-    // Botões IA: só para gestor pleno
     document.getElementById('btn-ai-analise').style.display = isGestorPleno ? 'inline-flex' : 'none';
     document.getElementById('btn-cobrar-ia').style.display = isGestorPleno ? 'inline-block' : 'none';
 
-    // Renderizar todas as seções novas (subtarefas, dependências, links, comentários)
+    // Renderizar todas as seções
+    refreshOpenTaskModal(t);
+}
+
+// Re-renderiza apenas o conteúdo dinâmico do modal aberto.
+// Chamado também pelo snapshot do Firestore quando a tarefa muda.
+function refreshOpenTaskModal(t) {
+    if (!t) return;
     renderSubtarefas(t);
     renderDependencias(t);
     renderLinks(t);
-    renderComentarios(t);
+    renderTimelineUnificada(t);
+    updateTabCounts(t);
+}
 
-    // Histórico
-    const hist = document.getElementById('modalHistorico');
-    hist.innerHTML = (t.historico && t.historico.length > 0) ? t.historico.map(h => {
-        let autorNome = h.autor;
-        let isSystem = h.autor === "SISTEMA";
-        if (!isSystem && autorNome.includes('@')) {
-            const u = allUsers.find(user => user.email === autorNome);
-            autorNome = u ? u.nome : autorNome.split('@')[0];
+// Atualizar contadores das tabs
+function updateTabCounts(t) {
+    const subs = t.subtarefas || [];
+    const concluidasSub = subs.filter(s => s.concluida).length;
+    document.getElementById('tab-count-subtarefas').textContent = subs.length > 0 ? `${concluidasSub}/${subs.length}` : '';
+
+    const deps = t.bloqueadaPor || [];
+    const depsAbertas = deps.filter(taskId => {
+        const dep = allTasks.find(x => x.id === taskId);
+        return dep && dep.status !== 'concluido';
+    });
+    document.getElementById('tab-count-dependencias').textContent = deps.length > 0 ? `${depsAbertas.length}/${deps.length}` : '';
+
+    const links = t.links || [];
+    document.getElementById('tab-count-links').textContent = links.length > 0 ? `${links.length}` : '';
+
+    const totalAtividade = (t.comentarios || []).length + (t.historico || []).length;
+    document.getElementById('tab-count-atividade').textContent = totalAtividade > 0 ? `${totalAtividade}` : '';
+}
+
+// Timeline unificada: combina comentários e histórico em ordem cronológica decrescente.
+function renderTimelineUnificada(t) {
+    const list = document.getElementById('timeline-list');
+    if (!list) return;
+
+    const eventos = [];
+    (t.historico || []).forEach(h => {
+        const tipo = h.autor === 'SISTEMA' ? 'sistema' : (h.autor === 'VETOR IA' ? 'ia' : 'reporte');
+        eventos.push({ tipo, autor: h.autor, texto: h.texto, data: h.data });
+    });
+    (t.comentarios || []).forEach(c => {
+        eventos.push({ tipo: 'comentario', autor: c.autor, texto: c.texto, data: c.criadoEm, mencoes: c.mencoes });
+    });
+
+    eventos.sort((a, b) => parseDataBR(b.data) - parseDataBR(a.data));
+
+    if (eventos.length === 0) {
+        list.innerHTML = '<p class="empty-hint">Nenhuma atividade ainda. Publique um comentário, reporte ou atualize o status.</p>';
+        return;
+    }
+
+    list.innerHTML = eventos.map(e => {
+        const u = (e.autor.includes('@')) ? allUsers.find(x => x.email === e.autor) : null;
+        const nomeExibido = u ? u.nome : (e.autor === 'SISTEMA' ? 'Sistema' : (e.autor === 'VETOR IA' ? 'Vetor IA' : e.autor.split('@')[0]));
+        const inicial = (nomeExibido[0] || '?').toUpperCase();
+        const iconeMap = {
+            sistema: '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/></svg>',
+            ia: '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M21 11.18V9.72c0-.47-.16-.92-.46-1.28L17.4 4.66c-.38-.46-.94-.72-1.54-.72H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-3.72zM7.5 14.5l-2.25-3 1.5-1.5 1.5 2 4.25-4.5 1.5 1.5-5 5z"/></svg>',
+            reporte: '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-2 16H8v-2h4v2zm4-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>',
+            comentario: '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M21 6h-2v9H6v2c0 .55.45 1 1 1h11l4 4V7c0-.55-.45-1-1-1zm-4 6V3c0-.55-.45-1-1-1H3c-.55 0-1 .45-1 1v14l4-4h11c.55 0 1-.45 1-1z"/></svg>'
+        };
+        const tipoLabel = { sistema: 'Sistema', ia: 'Vetor IA', reporte: 'Reporte', comentario: 'Comentário' };
+        const corClasse = `timeline-item-${e.tipo}`;
+        const textoFmt = e.tipo === 'comentario' ? formatComentarioTexto(e.texto) : escapeHtml(e.texto);
+        return `<div class="timeline-item ${corClasse}">
+            <div class="timeline-icon">${iconeMap[e.tipo] || ''}</div>
+            <div class="timeline-body">
+                <div class="timeline-header">
+                    <span class="timeline-tipo">${tipoLabel[e.tipo]}</span>
+                    <span class="timeline-autor">${e.tipo === 'sistema' || e.tipo === 'ia' ? '' : escapeHtml(nomeExibido)}</span>
+                    <span class="timeline-data">${escapeHtml(e.data)}</span>
+                </div>
+                <div class="timeline-texto">${textoFmt}</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+// Parse de data brasileira "DD/MM/YYYY HH:MM:SS" → timestamp
+function parseDataBR(str) {
+    if (!str) return 0;
+    const m = String(str).match(/(\d{2})\/(\d{2})\/(\d{4})(?:[, ]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+    if (!m) return 0;
+    const [, dia, mes, ano, h = '0', mn = '0', s = '0'] = m;
+    return new Date(`${ano}-${mes}-${dia}T${h.padStart(2,'0')}:${mn.padStart(2,'0')}:${s.padStart(2,'0')}`).getTime();
+}
+
+// Publicar atividade unificada: comentário, opcionalmente atualizando status
+async function publicarAtividade() {
+    const input = document.getElementById('atividade-input');
+    const texto = input.value.trim();
+    const updStatus = document.getElementById('atividade-update-status').checked;
+    const novoStatus = document.getElementById('atividade-novo-status').value;
+
+    if (!texto && !updStatus) return toast('Escreva algo ou marque para atualizar o status.', 'warning');
+    if (!currentTaskId) return;
+    const t = allTasks.find(x => x.id === currentTaskId);
+    if (!t) return;
+
+    // Se vai mudar status para andamento/aprovacao, conferir dependências
+    if (updStatus && (novoStatus === 'andamento' || novoStatus === 'aprovacao') && novoStatus !== t.status) {
+        const abertas = dependenciasAbertas(t);
+        if (abertas.length > 0) {
+            return toast(`Bloqueado: ${abertas.length} dependência(s) ainda não concluída(s).`, 'warning', 5000);
         }
-        return `<div class="history-item ${isSystem ? 'history-system' : ''}">
-                    <div class="history-header"><span class="history-author">${escapeHtml(autorNome)}</span><span class="history-date">${escapeHtml(h.data)}</span></div>
-                    <div class="history-body">${escapeHtml(h.texto)}</div>
-                </div>`;
-    }).join('') : "<em style='color:#94a3b8; font-size: 12px; display: block; text-align: center; padding: 10px 0;'>Nenhuma interação registrada.</em>";
+    }
+
+    const update = {};
+    let mencoesNotificar = [];
+    let mensagemNotif = texto;
+
+    // Detectar menções
+    if (texto) {
+        const mencoesRaw = (texto.match(/@([\w.\-]+@[\w.\-]+\.\w+|[\w.\-]+)/g) || []).map(m => m.slice(1));
+        const emailsMencionados = [];
+        mencoesRaw.forEach(ref => {
+            const u = allUsers.find(x => x.email === ref || x.nome.toLowerCase().split(' ').includes(ref.toLowerCase()));
+            if (u && !emailsMencionados.includes(u.email)) emailsMencionados.push(u.email);
+        });
+        mencoesNotificar = emailsMencionados;
+
+        // Se mudou status, registra como reporte (entra em historico). Senão, comentário.
+        if (updStatus && novoStatus !== t.status) {
+            const comentarios = Array.isArray(t.comentarios) ? [...t.comentarios] : [];
+            update.comentarios = [...comentarios, {
+                id: 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+                autor: currentUserEmail, texto,
+                criadoEm: new Date().toLocaleString('pt-BR'),
+                mencoes: emailsMencionados
+            }];
+            update.status = novoStatus;
+            update.historico = firebase.firestore.FieldValue.arrayUnion({
+                data: new Date().toLocaleString('pt-BR'),
+                autor: currentUserEmail,
+                texto: `Atualizou status para [${novoStatus.toUpperCase()}]: ${texto}`
+            });
+        } else {
+            const comentarios = Array.isArray(t.comentarios) ? [...t.comentarios] : [];
+            update.comentarios = [...comentarios, {
+                id: 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+                autor: currentUserEmail, texto,
+                criadoEm: new Date().toLocaleString('pt-BR'),
+                mencoes: emailsMencionados
+            }];
+        }
+    } else if (updStatus && novoStatus !== t.status) {
+        // Só mudança de status, sem texto
+        update.status = novoStatus;
+        update.historico = firebase.firestore.FieldValue.arrayUnion({
+            data: new Date().toLocaleString('pt-BR'),
+            autor: 'SISTEMA',
+            texto: `${currentUserNome || currentUserEmail} mudou status para [${novoStatus.toUpperCase()}]`
+        });
+        mensagemNotif = `Status mudou para ${novoStatus.toUpperCase()}`;
+    }
+
+    try {
+        await db.collection('tarefas').doc(currentTaskId).update(update);
+        input.value = '';
+        document.getElementById('atividade-update-status').checked = false;
+        document.getElementById('atividade-novo-status').disabled = true;
+
+        // Notificar mencionados
+        if (mencoesNotificar.length > 0) {
+            try {
+                const fn = functions.httpsCallable('sendNotification');
+                await fn({
+                    destinatarios: mencoesNotificar.filter(e => e !== currentUserEmail),
+                    tipo: 'MENÇÃO EM COMENTÁRIO',
+                    saudacao: '',
+                    mensagem: `Você foi mencionado em **${t.text}** (${t.project}):\n\n"${texto}"`
+                });
+            } catch (notifErr) { console.warn('Notificação não enviada:', notifErr); }
+        }
+
+        // Se houve mudança meaningful de status, notifica equipe + admins
+        if (updStatus && novoStatus !== t.status) {
+            try {
+                let recipients = (t.resps || []).map(r => r.email);
+                const superAdmins = allUsers.filter(u => u.papel === 'super-admin').map(u => u.email);
+                recipients = [...new Set([...recipients, ...superAdmins])].filter(e => e !== currentUserEmail);
+                if (recipients.length > 0) {
+                    const fn = functions.httpsCallable('sendNotification');
+                    await fn({
+                        destinatarios: recipients,
+                        tipo: 'ATUALIZAÇÃO',
+                        saudacao: '',
+                        mensagem: `**${t.text}**\nProjeto: ${t.project}\nAtualizado por: ${currentUserNome || currentUserEmail}\nNovo status: ${novoStatus.toUpperCase()}\n\n${mensagemNotif}`
+                    });
+                }
+            } catch (e) { console.warn('Notificação status não enviada:', e); }
+        }
+
+        toast('Publicado.', 'success');
+    } catch (e) {
+        console.error(e);
+        toast('Falha ao publicar.', 'error');
+    }
 }
 
 function closeModal() { document.getElementById('taskModal').classList.remove('active'); }
@@ -1109,7 +1312,8 @@ async function saveModalChanges() {
     const t = allTasks.find(x => x.id === currentTaskId);
     if (!t) return;
     const isGestorPleno = currentUserRole === 'super-admin' || managedAreas.includes(t.area) || managedProjects.includes(t.project);
-    const report = document.getElementById('newReport').value.trim();
+    // newReport foi descontinuado — agora se publica via aba Atividade
+    const report = '';
 
     const currentStatus = document.getElementById('editStatus').value;
     const currentTitle = document.getElementById('editTitle').value.trim();
@@ -1191,7 +1395,6 @@ async function saveModalChanges() {
                 } catch (e) { console.warn('Notificação não enviada:', e); }
             }
         }
-        document.getElementById('newReport').value = "";
         closeModal();
         toast('Alterações salvas.', 'success');
     } catch (e) {
@@ -1533,6 +1736,7 @@ function renderKanban() {
                         <span>📅 ${prazo}</span>
                         <span>👤 ${escapeHtml(respNomes)}</span>
                     </div>
+                    ${renderTaskMetaIcons(t)}
                 </div>`;
             });
         }
@@ -2577,6 +2781,143 @@ function tocarSomFoco() {
         o.start(); setTimeout(() => { o.frequency.value = 660; }, 200);
         setTimeout(() => { o.stop(); ctx.close(); }, 500);
     } catch (e) {}
+}
+
+// ==========================================================================
+// 20. AUTOCOMPLETE DE @ MENÇÕES + WIRING DA ATIVIDADE
+// ==========================================================================
+document.addEventListener('DOMContentLoaded', () => {
+    // Habilita/desabilita select de status conforme checkbox
+    const updChk = document.getElementById('atividade-update-status');
+    const novoSel = document.getElementById('atividade-novo-status');
+    if (updChk && novoSel) {
+        updChk.addEventListener('change', () => { novoSel.disabled = !updChk.checked; });
+    }
+
+    // Autocomplete de @ menções
+    const input = document.getElementById('atividade-input');
+    const dropdown = document.getElementById('mention-dropdown');
+    if (!input || !dropdown) return;
+
+    let mentionStart = -1;
+    let mentionFiltro = '';
+    let mentionIndex = 0;
+    let mentionMembros = [];
+
+    function getMembrosProjeto() {
+        const t = allTasks.find(x => x.id === currentTaskId);
+        if (!t) return [];
+        const set = new Map();
+        // Responsáveis da tarefa
+        (t.resps || []).forEach(r => set.set(r.email, { nome: r.nome, email: r.email, papel: r.papel }));
+        // Outras pessoas envolvidas em tarefas do mesmo projeto
+        allTasks.filter(tt => tt.project === t.project).forEach(tt => {
+            (tt.resps || []).forEach(r => {
+                if (!set.has(r.email)) set.set(r.email, { nome: r.nome, email: r.email, papel: r.papel });
+            });
+        });
+        // Gestores da área
+        const area = allAreasData.find(a => a.id === t.area);
+        if (area && area.gestores) {
+            area.gestores.forEach(em => {
+                const u = allUsers.find(x => x.email === em);
+                if (u && !set.has(em)) set.set(em, { nome: u.nome, email: u.email, papel: 'gestor' });
+            });
+        }
+        return Array.from(set.values()).sort((a, b) => a.nome.localeCompare(b.nome));
+    }
+
+    function fecharDropdown() {
+        dropdown.classList.remove('open');
+        dropdown.innerHTML = '';
+        mentionStart = -1;
+    }
+
+    function renderDropdown() {
+        if (mentionMembros.length === 0) { fecharDropdown(); return; }
+        dropdown.innerHTML = mentionMembros.map((m, i) => {
+            const inicial = (m.nome[0] || '?').toUpperCase();
+            const ativo = i === mentionIndex ? 'active' : '';
+            return `<div class="mention-item ${ativo}" data-index="${i}">
+                <div class="mention-avatar">${inicial}</div>
+                <div class="mention-info">
+                    <strong>${escapeHtml(m.nome)}</strong>
+                    <small>${escapeHtml(m.email)}</small>
+                </div>
+            </div>`;
+        }).join('');
+        dropdown.classList.add('open');
+        // Click handler em cada item
+        dropdown.querySelectorAll('.mention-item').forEach(el => {
+            el.addEventListener('mousedown', (ev) => { // mousedown evita perder foco antes
+                ev.preventDefault();
+                inserirMencao(parseInt(el.dataset.index, 10));
+            });
+        });
+    }
+
+    function inserirMencao(idx) {
+        if (idx < 0 || idx >= mentionMembros.length) return;
+        const membro = mentionMembros[idx];
+        const txt = input.value;
+        const antes = txt.slice(0, mentionStart);
+        const depois = txt.slice(input.selectionStart);
+        // Usa primeiro nome para ficar curto, mas a função formatComentarioTexto resolve
+        const nomeMencao = membro.nome.split(' ')[0];
+        input.value = antes + '@' + nomeMencao + ' ' + depois;
+        const novoCaret = (antes + '@' + nomeMencao + ' ').length;
+        input.setSelectionRange(novoCaret, novoCaret);
+        input.focus();
+        fecharDropdown();
+    }
+
+    input.addEventListener('input', (e) => {
+        const pos = input.selectionStart;
+        const txt = input.value.slice(0, pos);
+        // Detectar @ + texto sem espaço
+        const m = txt.match(/(?:^|\s)@([\w.\-]*)$/);
+        if (!m) { fecharDropdown(); return; }
+        mentionStart = pos - m[1].length - 1; // posição do @
+        mentionFiltro = m[1].toLowerCase();
+
+        // Filtrar membros
+        const todos = getMembrosProjeto();
+        mentionMembros = todos.filter(mb =>
+            !mentionFiltro ||
+            mb.nome.toLowerCase().includes(mentionFiltro) ||
+            mb.email.toLowerCase().includes(mentionFiltro)
+        ).slice(0, 6);
+        mentionIndex = 0;
+        renderDropdown();
+    });
+
+    input.addEventListener('keydown', (e) => {
+        if (!dropdown.classList.contains('open')) return;
+        if (e.key === 'ArrowDown') { e.preventDefault(); mentionIndex = (mentionIndex + 1) % mentionMembros.length; renderDropdown(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); mentionIndex = (mentionIndex - 1 + mentionMembros.length) % mentionMembros.length; renderDropdown(); }
+        else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); inserirMencao(mentionIndex); }
+        else if (e.key === 'Escape') { e.preventDefault(); fecharDropdown(); }
+    });
+
+    input.addEventListener('blur', () => setTimeout(fecharDropdown, 150));
+});
+
+// Helper: indicador de metadados para card Kanban e listas
+function renderTaskMetaIcons(t) {
+    const subs = t.subtarefas || [];
+    const subDone = subs.filter(s => s.concluida).length;
+    const deps = (t.bloqueadaPor || []).filter(id => {
+        const dep = allTasks.find(x => x.id === id);
+        return dep && dep.status !== 'concluido';
+    });
+    const links = (t.links || []).length;
+    const atividade = (t.comentarios || []).length + (t.historico || []).length;
+    const parts = [];
+    if (subs.length > 0) parts.push(`<span class="card-meta-icon" title="Subtarefas">☑ ${subDone}/${subs.length}</span>`);
+    if (deps.length > 0) parts.push(`<span class="card-meta-icon dep-warning" title="${deps.length} dependência(s) em aberto">🔒 ${deps.length}</span>`);
+    if (links > 0) parts.push(`<span class="card-meta-icon" title="Links de referência">🔗 ${links}</span>`);
+    if (atividade > 0) parts.push(`<span class="card-meta-icon" title="Atividades registradas">💬 ${atividade}</span>`);
+    return parts.length > 0 ? `<div class="card-meta-row">${parts.join('')}</div>` : '';
 }
 
 // ==========================================================================

@@ -150,8 +150,59 @@ const VETOR_URL = 'https://centro-de-comando-kappa.vercel.app/';
 // Logo hospedado no próprio site (Vercel serve arquivos estáticos da raiz).
 const VETOR_LOGO = VETOR_URL + 'logo-vetor.svg';
 
+// Parser leve de Markdown → HTML (para texto da IA dentro de e-mails)
+function mdToHtml(md) {
+  if (!md) return '';
+  const linhas = String(md).split('\n');
+  let out = '';
+  let i = 0;
+
+  function inline(s) {
+    return s
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/`([^`]+)`/g, '<code style="background:#f1f5f9;padding:1px 6px;border-radius:3px;font-size:12px;font-family:monospace">$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+  }
+
+  while (i < linhas.length) {
+    const ln = linhas[i].trim();
+    if (!ln) { i++; continue; }
+    if (/^---+$/.test(ln)) { out += '<hr style="border:0;border-top:1px solid #e2e8f0;margin:14px 0">'; i++; continue; }
+    if (/^#### /.test(ln)) { out += `<h4 style="margin:14px 0 6px;font-size:12px;color:#475569;text-transform:uppercase;letter-spacing:0.5px">${inline(ln.replace(/^#### /, ''))}</h4>`; i++; continue; }
+    if (/^### /.test(ln)) { out += `<h3 style="margin:16px 0 8px;font-size:14px;color:#1e3a8a">${inline(ln.replace(/^### /, ''))}</h3>`; i++; continue; }
+    if (/^## /.test(ln)) { out += `<h2 style="margin:18px 0 10px;font-size:16px;color:#0f172a;border-bottom:1px solid #e2e8f0;padding-bottom:6px">${inline(ln.replace(/^## /, ''))}</h2>`; i++; continue; }
+    if (/^# /.test(ln)) { out += `<h2 style="margin:20px 0 12px;font-size:17px;color:#0f172a">${inline(ln.replace(/^# /, ''))}</h2>`; i++; continue; }
+    if (/^[-•] /.test(ln)) {
+      out += '<ul style="margin:8px 0;padding-left:22px">';
+      while (i < linhas.length && /^[-•] /.test(linhas[i].trim())) {
+        out += `<li style="margin-bottom:4px;line-height:1.5">${inline(linhas[i].trim().replace(/^[-•] /, ''))}</li>`;
+        i++;
+      }
+      out += '</ul>';
+      continue;
+    }
+    if (/^\d+\. /.test(ln)) {
+      out += '<ol style="margin:8px 0;padding-left:22px">';
+      while (i < linhas.length && /^\d+\. /.test(linhas[i].trim())) {
+        out += `<li style="margin-bottom:4px;line-height:1.5">${inline(linhas[i].trim().replace(/^\d+\. /, ''))}</li>`;
+        i++;
+      }
+      out += '</ol>';
+      continue;
+    }
+    // Parágrafo
+    let para = inline(ln); i++;
+    while (i < linhas.length && linhas[i].trim() && !/^(#|---|[-•] |\d+\. )/.test(linhas[i].trim())) {
+      para += '<br>' + inline(linhas[i].trim()); i++;
+    }
+    out += `<p style="margin:0 0 10px;line-height:1.6">${para}</p>`;
+  }
+  return out;
+}
+
 function buildEmailHtml({ saudacao, tipo, mensagem }) {
-  // Template HTML do Vetor. Compatível com Gmail, Outlook, Apple Mail.
+  const corpo = mdToHtml(mensagem);
   return `<!doctype html>
 <html><head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:Segoe UI,Arial,sans-serif;color:#0f172a">
@@ -172,9 +223,9 @@ function buildEmailHtml({ saudacao, tipo, mensagem }) {
   </table>
 </td></tr>
 <tr><td style="padding:28px">
-  <p style="margin:0 0 8px;font-size:13px;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:700">${tipo}</p>
-  <h2 style="margin:0 0 14px;font-size:18px">${saudacao}</h2>
-  <div style="font-size:14px;line-height:1.55;color:#334155;white-space:pre-wrap;margin-bottom:24px">${mensagem}</div>
+  <p style="margin:0 0 8px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:2px;font-weight:800">${tipo}</p>
+  <h2 style="margin:0 0 18px;font-size:20px;color:#0f172a">${saudacao}</h2>
+  <div style="font-size:14px;color:#334155;margin-bottom:24px">${corpo}</div>
   <table cellpadding="0" cellspacing="0" border="0" style="margin:8px 0">
     <tr><td style="background:#0f172a;border-radius:6px">
       <a href="${VETOR_URL}" style="display:inline-block;padding:12px 28px;color:#ffffff;font-size:13px;font-weight:700;letter-spacing:1px;text-decoration:none;text-transform:uppercase">
@@ -189,6 +240,157 @@ function buildEmailHtml({ saudacao, tipo, mensagem }) {
 <tr><td style="padding:18px 28px;background:#f8fafc;font-size:11px;color:#64748b;border-top:1px solid #e2e8f0">
   Esta é uma mensagem automática do sistema Vetor.
 </td></tr>
+</table></td></tr></table></body></html>`;
+}
+
+// ============================================================================
+// E-mail especializado de BRIEFING DIÁRIO — visual rico com KPIs e gráficos
+// ============================================================================
+function buildBriefingHtml({ saudacao, dataHoje, kpis, saude, mapaCritico, cargaPessoas, textoIA }) {
+  const corpo = mdToHtml(textoIA);
+
+  // Card KPI
+  function kpi(num, label, cor) {
+    return `<td width="25%" style="padding:4px" valign="top">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;border-top:3px solid ${cor}">
+        <tr><td style="padding:14px 8px;text-align:center">
+          <div style="font-size:26px;font-weight:800;color:#0f172a;line-height:1">${num}</div>
+          <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;margin-top:6px">${label}</div>
+        </td></tr>
+      </table>
+    </td>`;
+  }
+
+  // Saúde da operação (barra)
+  let saudeColor = '#10b981', saudeTexto = 'Operação saudável';
+  if (saude < 70) { saudeColor = '#f59e0b'; saudeTexto = 'Atenção — alguns pontos críticos'; }
+  if (saude < 50) { saudeColor = '#dc3545'; saudeTexto = 'Pressão elevada — ação imediata necessária'; }
+
+  // Mapa crítico (top tarefas)
+  const mapaHtml = mapaCritico.length === 0
+    ? '<p style="margin:0;color:#94a3b8;font-style:italic;text-align:center;padding:14px">Nenhuma tarefa crítica no momento.</p>'
+    : mapaCritico.map(m => `
+      <tr>
+        <td style="padding:10px 8px;border-bottom:1px solid #f1f5f9">
+          <div style="font-size:13px;font-weight:700;color:#0f172a">${m.titulo}</div>
+          <div style="font-size:11px;color:#64748b;margin-top:2px">${m.projeto} · ${m.responsavel}</div>
+        </td>
+        <td style="padding:10px 8px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap">
+          <span style="background:${m.atraso > 0 ? '#fee2e2' : '#fef3c7'};color:${m.atraso > 0 ? '#b91c1c' : '#92400e'};font-size:11px;font-weight:800;padding:3px 10px;border-radius:100px">
+            ${m.atraso > 0 ? `−${m.atraso}d` : 'hoje'}
+          </span>
+        </td>
+      </tr>
+    `).join('');
+
+  // Carga por pessoa (barras horizontais)
+  const maxCarga = Math.max(1, ...cargaPessoas.map(p => p.total));
+  const cargaHtml = cargaPessoas.length === 0
+    ? '<p style="margin:0;color:#94a3b8;font-style:italic;text-align:center;padding:14px">Sem dados.</p>'
+    : cargaPessoas.map(p => {
+      const percTotal = (p.total / maxCarga) * 100;
+      const percCriticas = p.total > 0 ? (p.criticas / p.total) * 100 : 0;
+      return `<tr>
+        <td style="padding:6px 0;width:130px;font-size:12px;color:#0f172a;font-weight:600">${p.nome}</td>
+        <td style="padding:6px 8px">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;border-radius:4px;height:18px">
+            <tr><td style="background:${p.criticas > 0 ? '#dc3545' : '#3b82f6'};width:${percTotal}%;border-radius:4px;height:18px"></td><td></td></tr>
+          </table>
+        </td>
+        <td style="padding:6px 0;width:80px;text-align:right;font-size:11px;color:#475569;font-weight:700">${p.total} ${p.criticas > 0 ? `(${p.criticas} críticas)` : 'ativas'}</td>
+      </tr>`;
+    }).join('');
+
+  return `<!doctype html>
+<html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Segoe UI,Arial,sans-serif;color:#0f172a">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 0">
+<tr><td align="center">
+<table width="640" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 6px 20px rgba(15,23,42,0.10);max-width:640px">
+
+  <!-- Header -->
+  <tr><td style="background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#2563eb 100%);padding:28px 32px;color:#fff">
+    <table cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
+      <td style="vertical-align:middle;padding-right:14px;width:44px">
+        <img src="${VETOR_LOGO}" alt="Vetor" width="36" height="36" style="display:block;border:0">
+      </td>
+      <td style="vertical-align:middle">
+        <div style="font-weight:800;font-size:22px;letter-spacing:3px;line-height:1">VETOR</div>
+        <div style="font-size:10px;letter-spacing:2px;opacity:0.85;margin-top:3px">DIREÇÃO · MAGNITUDE · RESULTADO</div>
+      </td>
+      <td style="vertical-align:middle;text-align:right">
+        <div style="font-size:10px;letter-spacing:1.5px;opacity:0.85;text-transform:uppercase;font-weight:700">Briefing Diário</div>
+        <div style="font-size:13px;font-weight:700;margin-top:3px">${dataHoje}</div>
+      </td>
+    </tr></table>
+  </td></tr>
+
+  <!-- Saudação -->
+  <tr><td style="padding:28px 32px 8px">
+    <h1 style="margin:0;font-size:22px;color:#0f172a">${saudacao}</h1>
+  </td></tr>
+
+  <!-- KPIs -->
+  <tr><td style="padding:14px 28px">
+    <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1.5px;font-weight:800;margin-bottom:10px;padding-left:4px">Estado da Operação</div>
+    <table width="100%" cellpadding="0" cellspacing="0"><tr>
+      ${kpi(kpis.total, 'Demandas', '#0f172a')}
+      ${kpi(kpis.criticas, 'Críticas', '#dc3545')}
+      ${kpi(kpis.atrasadas, 'Atrasadas', '#f59e0b')}
+      ${kpi(kpis.execucao, 'Em execução', '#3b82f6')}
+    </tr></table>
+  </td></tr>
+
+  <!-- Saúde -->
+  <tr><td style="padding:14px 32px">
+    <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1.5px;font-weight:800;margin-bottom:8px">Saúde da Operação</div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;border-radius:6px;height:14px;overflow:hidden">
+      <tr><td style="background:${saudeColor};width:${saude}%;height:14px"></td><td></td></tr>
+    </table>
+    <div style="margin-top:8px;font-size:12px;color:${saudeColor};font-weight:700">${saude}% — ${saudeTexto}</div>
+  </td></tr>
+
+  <!-- Mapa Crítico -->
+  <tr><td style="padding:18px 32px 6px">
+    <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1.5px;font-weight:800;margin-bottom:10px">Mapa Crítico — Top 5 urgentes</div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+      ${mapaHtml}
+    </table>
+  </td></tr>
+
+  <!-- Carga por Pessoa -->
+  <tr><td style="padding:18px 32px 6px">
+    <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1.5px;font-weight:800;margin-bottom:10px">Carga por Pessoa — Top 5</div>
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${cargaHtml}
+    </table>
+  </td></tr>
+
+  <!-- Diagnóstico IA -->
+  <tr><td style="padding:24px 32px 6px">
+    <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1.5px;font-weight:800;margin-bottom:10px">Diagnóstico Vetor IA</div>
+    <div style="background:#f8fafc;border-left:3px solid #8b5cf6;padding:18px 20px;border-radius:0 6px 6px 0;font-size:13px;color:#334155">
+      ${corpo}
+    </div>
+  </td></tr>
+
+  <!-- CTA -->
+  <tr><td style="padding:24px 32px 28px;text-align:center">
+    <table cellpadding="0" cellspacing="0" border="0" align="center"><tr>
+      <td style="background:#0f172a;border-radius:6px">
+        <a href="${VETOR_URL}" style="display:inline-block;padding:14px 32px;color:#ffffff;font-size:13px;font-weight:700;letter-spacing:1px;text-decoration:none;text-transform:uppercase">Acessar o Vetor →</a>
+      </td>
+    </tr></table>
+    <p style="margin:14px 0 0;font-size:11px;color:#94a3b8">
+      <a href="${VETOR_URL}" style="color:#2563eb;text-decoration:none">${VETOR_URL}</a>
+    </p>
+  </td></tr>
+
+  <!-- Footer -->
+  <tr><td style="padding:18px 32px;background:#f8fafc;font-size:11px;color:#64748b;border-top:1px solid #e2e8f0;text-align:center">
+    Briefing automático gerado pela Vetor IA · ${dataHoje}
+  </td></tr>
+
 </table></td></tr></table></body></html>`;
 }
 
@@ -535,20 +737,57 @@ exports.dailyBriefing = onSchedule(
   },
   async () => {
     const tasksSnap = await db.collection('tarefas').get();
-    const tarefas = tasksSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const tarefas = tasksSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => !t.arquivada);
     const usersSnap = await db.collection('usuarios').get();
     const usuarios = usersSnap.docs.map(d => d.data());
 
-    const stats = {
+    // KPIs
+    const kpis = {
       total: tarefas.length,
       criticas: tarefas.filter(t => calcStatus(t) === 'critica').length,
       atrasadas: tarefas.filter(t => calcStatus(t) === 'atrasada').length,
       execucao: tarefas.filter(t => calcStatus(t) === 'execucao').length,
-      aguardando: tarefas.filter(t => calcStatus(t) === 'aguardando').length
+      aguardando: tarefas.filter(t => calcStatus(t) === 'aguardando').length,
+      concluidas: tarefas.filter(t => calcStatus(t) === 'concluida').length
     };
 
+    // Saúde da operação (0-100): pondera críticas e atrasadas contra o total
+    const ativas = kpis.total - kpis.concluidas;
+    const peso = ativas > 0 ? ((kpis.criticas * 2.5 + kpis.atrasadas * 1.2) / ativas) : 0;
+    const saude = Math.max(0, Math.min(100, Math.round(100 - (peso * 80))));
+
+    // Mapa Crítico — top 5 tarefas mais urgentes
+    const hojeMs = Date.now();
+    const mapaCritico = tarefas
+      .filter(t => calcStatus(t) === 'critica' || calcStatus(t) === 'atrasada')
+      .map(t => {
+        const fim = t.data_fim ? new Date(t.data_fim + 'T00:00:00').getTime() : hojeMs;
+        const atraso = Math.floor((hojeMs - fim) / 86400000);
+        return {
+          titulo: t.text,
+          projeto: t.project || 'Sem projeto',
+          responsavel: (t.resps?.[0]?.nome) || 'Sem responsável',
+          atraso
+        };
+      })
+      .sort((a, b) => b.atraso - a.atraso)
+      .slice(0, 5);
+
+    // Carga por pessoa — top 5 com mais ativas (não concluídas)
+    const cargaMap = {};
+    tarefas.forEach(t => {
+      const cs = calcStatus(t);
+      if (cs === 'concluida') return;
+      (t.resps || []).forEach(r => {
+        if (!cargaMap[r.email]) cargaMap[r.email] = { nome: r.nome.split(' ').slice(0,2).join(' '), total: 0, criticas: 0 };
+        cargaMap[r.email].total++;
+        if (cs === 'critica') cargaMap[r.email].criticas++;
+      });
+    });
+    const cargaPessoas = Object.values(cargaMap).sort((a, b) => (b.criticas - a.criticas) || (b.total - a.total)).slice(0, 5);
+
+    // Tarefas paradas (sem reporte há +5 dias)
     const cincoDias = 5 * 86400000;
-    const agora = Date.now();
     const paradas = tarefas.filter(t => {
       if (calcStatus(t) === 'concluida') return false;
       if (!t.historico || t.historico.length === 0) return false;
@@ -556,32 +795,68 @@ exports.dailyBriefing = onSchedule(
       const m = (ult.data || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
       if (!m) return false;
       const d = new Date(`${m[3]}-${m[2]}-${m[1]}`);
-      return (agora - d.getTime()) > cincoDias;
+      return (hojeMs - d.getTime()) > cincoDias;
     }).slice(0, 10);
 
-    const sys = `Você é o Vetor IA produzindo o BRIEFING DIÁRIO EXECUTIVO. Português, conciso,
-máx 14 linhas. Estrutura: 1 frase de quadro geral, 3 pontos de atenção (com nome/projeto/dados),
-sugestão de ação. Use **negrito** para destaques.`;
-    const usr = `ESTATÍSTICAS: ${JSON.stringify(stats)}
-CRÍTICAS (TOP 10): ${JSON.stringify(tarefas.filter(t => calcStatus(t) === 'critica').slice(0, 10).map(t => ({ titulo: t.text, projeto: t.project, prazo: t.data_fim, resp: t.resps?.[0]?.nome })))}
-PARADAS +5 DIAS: ${JSON.stringify(paradas.map(t => ({ titulo: t.text, projeto: t.project, ultimo_reporte: t.historico?.[t.historico.length - 1]?.data })))}
+    // IA: gera só o diagnóstico em prosa (sem precisar repetir KPIs já visuais)
+    const sys = `Você é o Vetor IA, redigindo o DIAGNÓSTICO do briefing diário executivo.
+NÃO repita números/KPIs (eles já aparecem em cards visuais antes do seu texto).
+Seu papel: interpretar o que está acontecendo, identificar 2-3 padrões críticos
+e recomendar 1 ação concreta para o gestor agir HOJE. Máximo 12 linhas.
 
-Produza o briefing.`;
+FORMATO obrigatório (use Markdown):
+## Padrões observados
+- (1-3 bullets curtos com nomes próprios e dados específicos)
 
-    const briefing = await callClaude(sys, usr);
+## Recomendação para hoje
+(1 parágrafo curto e direto, com a ação mais importante)
 
+NÃO repita "X tarefas críticas" — o leitor já viu nos cards. Foque em INTERPRETAÇÃO e DIREÇÃO.`;
+
+    const usr = `KPIs (já no email): ${JSON.stringify(kpis)}, Saúde: ${saude}%
+TAREFAS CRÍTICAS DETALHADAS: ${JSON.stringify(tarefas.filter(t => calcStatus(t) === 'critica').slice(0, 10).map(t => ({ titulo: t.text, projeto: t.project, prazo: t.data_fim, resp: t.resps?.[0]?.nome })))}
+TAREFAS PARADAS: ${JSON.stringify(paradas.map(t => ({ titulo: t.text, projeto: t.project, ultimo_reporte: t.historico?.[t.historico.length - 1]?.data, resp: t.resps?.[0]?.nome })))}
+CARGA TOP: ${JSON.stringify(cargaPessoas)}
+
+Produza apenas o diagnóstico textual.`;
+
+    const textoIA = await callClaude(sys, usr);
+
+    // Data formatada
+    const dt = new Date();
+    const dataHoje = dt.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'America/Sao_Paulo' });
+
+    // Configurar transporte
+    const transporter = getMailTransporter();
+    const fromEmail = GMAIL_USER.value();
+
+    // Enviar para super-admins (email rico) + WhatsApp resumido
     const superAdmins = usuarios.filter(u => u.papel === 'super-admin');
     for (const u of superAdmins) {
+      const saudacao = `Bom dia, ${(u.nome || '').split(' ')[0]}.`;
+      const html = buildBriefingHtml({ saudacao, dataHoje, kpis, saude, mapaCritico, cargaPessoas, textoIA });
       try {
-        await notifyUser(u, 'BRIEFING DIÁRIO', `Bom dia, ${(u.nome || '').split(' ')[0]}.`, briefing);
-      } catch (err) { console.error('briefing erro:', err); }
+        await transporter.sendMail({
+          from: `"Vetor" <${fromEmail}>`,
+          to: u.email,
+          subject: `[Vetor] Briefing diário — ${dataHoje}`,
+          html
+        });
+      } catch (err) { console.error('briefing email erro:', err); }
+      // WhatsApp: versão curta (template com 3 parâmetros)
+      if (u.telefone) {
+        const resumoWa = `Saúde da operação: ${saude}%. ${kpis.criticas} crítica(s), ${kpis.atrasadas} atrasada(s), ${kpis.execucao} em execução. Acesse o Vetor para ver o briefing completo.`;
+        try {
+          await sendWhatsApp(u.telefone, [(u.nome || '').split(' ')[0] || 'Olá', 'BRIEFING DIÁRIO', resumoWa]);
+        } catch (err) { console.error('briefing whatsapp erro:', err); }
+      }
     }
 
     await db.collection('briefings_diarios').add({
       data: admin.firestore.FieldValue.serverTimestamp(),
-      stats, paradas: paradas.length, briefing
+      kpis, saude, mapaCritico, cargaPessoas, paradas: paradas.length, textoIA
     });
 
-    console.log('Briefing diário enviado para', superAdmins.length, 'admins.');
+    console.log('Briefing diário (visual) enviado para', superAdmins.length, 'admins.');
   }
 );
