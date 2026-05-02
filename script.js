@@ -1068,6 +1068,12 @@ function abrirModal(id) {
     document.getElementById('btn-ai-analise').style.display = isGestorPleno ? 'inline-flex' : 'none';
     document.getElementById('btn-cobrar-ia').style.display = isGestorPleno ? 'inline-block' : 'none';
 
+    // Renderizar todas as seções novas (subtarefas, dependências, links, comentários)
+    renderSubtarefas(t);
+    renderDependencias(t);
+    renderLinks(t);
+    renderComentarios(t);
+
     // Histórico
     const hist = document.getElementById('modalHistorico');
     hist.innerHTML = (t.historico && t.historico.length > 0) ? t.historico.map(h => {
@@ -1128,6 +1134,15 @@ async function saveModalChanges() {
     if (!hasAnyChange) {
         const manter = await vetorConfirm('Nenhuma alteração detectada. Salvar mesmo assim?', 'Sem alterações');
         if (!manter) return; else { closeModal(); return; }
+    }
+
+    // Trava de dependências: não permite mover para 'andamento' ou 'aprovacao' se houver bloqueios em aberto.
+    if ((currentStatus === 'andamento' || currentStatus === 'aprovacao') && currentStatus !== t.status) {
+        const abertas = dependenciasAbertas(t);
+        if (abertas.length > 0) {
+            toast(`Bloqueado: ${abertas.length} dependência(s) ainda não concluída(s).`, 'warning', 5000);
+            return;
+        }
     }
 
     const update = { status: currentStatus };
@@ -2125,6 +2140,443 @@ async function cobrarComIA() {
     } catch (e) {
         toast('Falha ao enviar cobrança.', 'error');
     }
+}
+
+// ==========================================================================
+// 15. SUBTAREFAS / CHECKLIST
+// ==========================================================================
+function renderSubtarefas(t) {
+    const list = document.getElementById('subtarefas-list');
+    const count = document.getElementById('subtarefas-count');
+    if (!list) return;
+    const subs = t.subtarefas || [];
+    const concluidas = subs.filter(s => s.concluida).length;
+    count.textContent = subs.length > 0 ? `(${concluidas}/${subs.length})` : '';
+
+    if (subs.length === 0) {
+        list.innerHTML = '<p class="empty-hint">Nenhuma subtarefa. Adicione abaixo para quebrar essa demanda em passos.</p>';
+        return;
+    }
+    list.innerHTML = subs.map(s => `
+        <div class="subtarefa-item ${s.concluida ? 'done' : ''}">
+            <input type="checkbox" ${s.concluida ? 'checked' : ''} onchange="toggleSubtarefa('${s.id}')">
+            <span class="subtarefa-texto">${escapeHtml(s.texto)}</span>
+            <button class="subtarefa-remove" onclick="removerSubtarefa('${s.id}')" aria-label="Remover">&times;</button>
+        </div>
+    `).join('');
+}
+
+async function adicionarSubtarefa() {
+    const input = document.getElementById('subtarefa-input');
+    const texto = input.value.trim();
+    if (!texto || !currentTaskId) return;
+    const t = allTasks.find(x => x.id === currentTaskId);
+    if (!t) return;
+    const subs = Array.isArray(t.subtarefas) ? [...t.subtarefas] : [];
+    subs.push({
+        id: 'sub_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        texto, concluida: false,
+        criadoPor: currentUserEmail,
+        criadoEm: new Date().toLocaleString('pt-BR')
+    });
+    try {
+        await db.collection('tarefas').doc(currentTaskId).update({ subtarefas: subs });
+        input.value = '';
+    } catch (e) { toast('Falha ao adicionar subtarefa.', 'error'); }
+}
+
+async function toggleSubtarefa(subId) {
+    const t = allTasks.find(x => x.id === currentTaskId);
+    if (!t || !t.subtarefas) return;
+    const subs = t.subtarefas.map(s => s.id === subId ? { ...s, concluida: !s.concluida } : s);
+    try { await db.collection('tarefas').doc(currentTaskId).update({ subtarefas: subs }); }
+    catch (e) { toast('Falha ao atualizar subtarefa.', 'error'); }
+}
+
+async function removerSubtarefa(subId) {
+    const t = allTasks.find(x => x.id === currentTaskId);
+    if (!t || !t.subtarefas) return;
+    const subs = t.subtarefas.filter(s => s.id !== subId);
+    try { await db.collection('tarefas').doc(currentTaskId).update({ subtarefas: subs }); }
+    catch (e) { toast('Falha ao remover subtarefa.', 'error'); }
+}
+
+// ==========================================================================
+// 16. DEPENDÊNCIAS ENTRE TAREFAS
+// ==========================================================================
+function renderDependencias(t) {
+    const list = document.getElementById('dependencias-list');
+    const count = document.getElementById('dependencias-count');
+    const select = document.getElementById('dependencia-select');
+    if (!list || !select) return;
+
+    const deps = (t.bloqueadaPor || []);
+    const depsAbertas = deps.filter(taskId => {
+        const dep = allTasks.find(x => x.id === taskId);
+        return dep && dep.status !== 'concluido';
+    });
+    count.textContent = deps.length > 0 ? `(${depsAbertas.length} em aberto / ${deps.length})` : '';
+
+    if (deps.length === 0) {
+        list.innerHTML = '<p class="empty-hint">Esta tarefa não depende de nenhuma outra.</p>';
+    } else {
+        list.innerHTML = deps.map(taskId => {
+            const dep = allTasks.find(x => x.id === taskId);
+            if (!dep) return `<div class="dependencia-item dep-orfa">
+                <span>⚠ Tarefa #${taskId.slice(0,6)}... (não encontrada)</span>
+                <button class="dependencia-remove" onclick="removerDependencia('${taskId}')">&times;</button>
+            </div>`;
+            const cs = getCalculatedStatus(dep);
+            const concluida = dep.status === 'concluido';
+            return `<div class="dependencia-item ${concluida ? 'dep-ok' : 'dep-aberta'}">
+                <span class="dep-icon">${concluida ? '✓' : '⏳'}</span>
+                <div class="dep-info">
+                    <strong>${escapeHtml(dep.text)}</strong>
+                    <small>${escapeHtml(dep.project)} · <span class="status-pill ${cs.class}" style="font-size:9px;">${cs.label}</span></small>
+                </div>
+                <button class="dependencia-remove" onclick="removerDependencia('${taskId}')" aria-label="Remover">&times;</button>
+            </div>`;
+        }).join('');
+    }
+
+    // Popular o select com tarefas disponíveis para vincular como bloqueio
+    const bloqueadasJa = new Set(deps);
+    bloqueadasJa.add(currentTaskId); // não pode bloquear a si mesma
+    const candidatas = getVisibleTasksBoard()
+        .filter(x => !bloqueadasJa.has(x.id) && x.status !== 'concluido')
+        .sort((a, b) => a.text.localeCompare(b.text));
+    let html = '<option value="">Selecione uma tarefa que bloqueia esta...</option>';
+    candidatas.forEach(c => {
+        html += `<option value="${c.id}">${escapeHtml(c.project)} · ${escapeHtml(c.text)}</option>`;
+    });
+    select.innerHTML = html;
+}
+
+async function adicionarDependencia() {
+    const select = document.getElementById('dependencia-select');
+    const newDep = select.value;
+    if (!newDep || !currentTaskId) return;
+    const t = allTasks.find(x => x.id === currentTaskId);
+    if (!t) return;
+    const deps = Array.isArray(t.bloqueadaPor) ? [...t.bloqueadaPor] : [];
+    if (deps.includes(newDep)) return;
+    deps.push(newDep);
+    try {
+        await db.collection('tarefas').doc(currentTaskId).update({ bloqueadaPor: deps });
+        toast('Dependência vinculada.', 'success');
+    } catch (e) { toast('Falha ao vincular dependência.', 'error'); }
+}
+
+async function removerDependencia(taskId) {
+    const t = allTasks.find(x => x.id === currentTaskId);
+    if (!t || !t.bloqueadaPor) return;
+    const deps = t.bloqueadaPor.filter(d => d !== taskId);
+    try { await db.collection('tarefas').doc(currentTaskId).update({ bloqueadaPor: deps }); }
+    catch (e) { toast('Falha ao remover dependência.', 'error'); }
+}
+
+// Verifica se tarefa pode ser movida para 'andamento' (todas as dependências concluídas)
+function dependenciasAbertas(t) {
+    if (!t.bloqueadaPor || t.bloqueadaPor.length === 0) return [];
+    return t.bloqueadaPor.map(id => allTasks.find(x => x.id === id))
+        .filter(d => d && d.status !== 'concluido');
+}
+
+// ==========================================================================
+// 17. LINKS DE REFERÊNCIA
+// ==========================================================================
+function renderLinks(t) {
+    const list = document.getElementById('links-list');
+    const count = document.getElementById('links-count');
+    if (!list) return;
+    const links = t.links || [];
+    count.textContent = links.length > 0 ? `(${links.length})` : '';
+
+    if (links.length === 0) {
+        list.innerHTML = '<p class="empty-hint">Nenhum link vinculado.</p>';
+        return;
+    }
+    list.innerHTML = links.map(l => `
+        <div class="link-item">
+            <a href="${escapeHtml(l.url)}" target="_blank" rel="noopener" class="link-anchor">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+                <strong>${escapeHtml(l.label || 'Link')}</strong>
+                <small>${escapeHtml(l.url.length > 40 ? l.url.slice(0, 40) + '...' : l.url)}</small>
+            </a>
+            <button class="link-remove" onclick="removerLink('${l.id}')" aria-label="Remover">&times;</button>
+        </div>
+    `).join('');
+}
+
+async function adicionarLink() {
+    const labelInput = document.getElementById('link-label');
+    const urlInput = document.getElementById('link-url');
+    const label = labelInput.value.trim();
+    const url = urlInput.value.trim();
+    if (!url || !currentTaskId) return toast('Informe a URL.', 'warning');
+    try { new URL(url); } catch (e) { return toast('URL inválida.', 'warning'); }
+    const t = allTasks.find(x => x.id === currentTaskId);
+    if (!t) return;
+    const links = Array.isArray(t.links) ? [...t.links] : [];
+    links.push({
+        id: 'lk_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        label: label || 'Link', url
+    });
+    try {
+        await db.collection('tarefas').doc(currentTaskId).update({ links });
+        labelInput.value = ''; urlInput.value = '';
+    } catch (e) { toast('Falha ao adicionar link.', 'error'); }
+}
+
+async function removerLink(linkId) {
+    const t = allTasks.find(x => x.id === currentTaskId);
+    if (!t || !t.links) return;
+    const links = t.links.filter(l => l.id !== linkId);
+    try { await db.collection('tarefas').doc(currentTaskId).update({ links }); }
+    catch (e) { toast('Falha ao remover link.', 'error'); }
+}
+
+// ==========================================================================
+// 18. COMENTÁRIOS COM @ MENÇÕES
+// ==========================================================================
+function renderComentarios(t) {
+    const list = document.getElementById('comentarios-list');
+    const count = document.getElementById('comentarios-count');
+    if (!list) return;
+    const comentarios = t.comentarios || [];
+    count.textContent = comentarios.length > 0 ? `(${comentarios.length})` : '';
+
+    if (comentarios.length === 0) {
+        list.innerHTML = '<p class="empty-hint">Nenhum comentário ainda. Use @ para mencionar membros da equipe.</p>';
+        return;
+    }
+    list.innerHTML = comentarios.map(c => {
+        const u = allUsers.find(x => x.email === c.autor);
+        const nome = u ? u.nome : c.autor.split('@')[0];
+        const inicial = (nome[0] || '?').toUpperCase();
+        return `<div class="comentario-item">
+            <div class="comentario-avatar">${inicial}</div>
+            <div class="comentario-body">
+                <div class="comentario-header">
+                    <strong>${escapeHtml(nome)}</strong>
+                    <small>${escapeHtml(c.criadoEm)}</small>
+                </div>
+                <div class="comentario-texto">${formatComentarioTexto(c.texto)}</div>
+            </div>
+        </div>`;
+    }).join('');
+    list.scrollTop = list.scrollHeight;
+}
+
+function formatComentarioTexto(t) {
+    // Renderiza @menções como pílulas
+    return escapeHtml(t).replace(/@([\w.\-]+@[\w.\-]+\.\w+|[\w.\-]+)/g, (match, p1) => {
+        const u = allUsers.find(x => x.email === p1 || x.nome.toLowerCase().includes(p1.toLowerCase()));
+        const nomeExibido = u ? u.nome.split(' ')[0] : p1;
+        return `<span class="mention-pill">@${escapeHtml(nomeExibido)}</span>`;
+    }).replace(/\n/g, '<br>');
+}
+
+async function adicionarComentario() {
+    const input = document.getElementById('comentario-input');
+    const texto = input.value.trim();
+    if (!texto || !currentTaskId) return;
+    const t = allTasks.find(x => x.id === currentTaskId);
+    if (!t) return;
+
+    // Detectar menções (@email ou @nome)
+    const mencoesRaw = (texto.match(/@([\w.\-]+@[\w.\-]+\.\w+|[\w.\-]+)/g) || []).map(m => m.slice(1));
+    const emailsMencionados = [];
+    mencoesRaw.forEach(ref => {
+        const u = allUsers.find(x => x.email === ref || x.nome.toLowerCase().split(' ').includes(ref.toLowerCase()));
+        if (u && !emailsMencionados.includes(u.email)) emailsMencionados.push(u.email);
+    });
+
+    const comentarios = Array.isArray(t.comentarios) ? [...t.comentarios] : [];
+    comentarios.push({
+        id: 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        autor: currentUserEmail,
+        texto,
+        criadoEm: new Date().toLocaleString('pt-BR'),
+        mencoes: emailsMencionados
+    });
+
+    try {
+        await db.collection('tarefas').doc(currentTaskId).update({ comentarios });
+        input.value = '';
+
+        // Notificar mencionados
+        if (emailsMencionados.length > 0) {
+            try {
+                const fn = functions.httpsCallable('sendNotification');
+                await fn({
+                    destinatarios: emailsMencionados.filter(e => e !== currentUserEmail),
+                    tipo: 'MENÇÃO EM COMENTÁRIO',
+                    saudacao: '',
+                    mensagem: `Você foi mencionado em um comentário na demanda **${t.text}** (projeto ${t.project}):\n\n"${texto}"\n\nAcesse o Vetor para responder.`
+                });
+            } catch (notifErr) { console.warn('Notificação de menção não enviada:', notifErr); }
+        }
+    } catch (e) { toast('Falha ao publicar comentário.', 'error'); }
+}
+
+// ==========================================================================
+// 19. MODO FOCO (Pomodoro)
+// ==========================================================================
+let focoState = {
+    running: false, paused: false,
+    fase: 'foco', // 'foco' | 'pausa'
+    duracaoFoco: 25, // minutos
+    duracaoPausa: 5,
+    tecnica: 'Pomodoro Clássico',
+    inicioMs: 0, msAcumuladosFase: 0,
+    intervaloId: null,
+    taskIdContexto: null,
+    minutosTotalSessao: 0
+};
+
+function abrirModoFoco() {
+    const t = allTasks.find(x => x.id === currentTaskId);
+    if (!t) return;
+    focoState.taskIdContexto = currentTaskId;
+    document.getElementById('foco-titulo-tarefa').innerText = t.text;
+    document.getElementById('foco-titulo-tarefa-running').innerText = t.text;
+    document.getElementById('foco-done-tarefa').innerText = t.text;
+    document.getElementById('foco-setup').style.display = 'block';
+    document.getElementById('foco-running').style.display = 'none';
+    document.getElementById('foco-done').style.display = 'none';
+    document.getElementById('modoFocoOverlay').classList.add('active');
+}
+
+function fecharModoFoco() {
+    if (focoState.running && !focoState.paused) {
+        if (!confirm('Sessão de foco em andamento. Encerrar mesmo assim?')) return;
+    }
+    pararTimerFoco();
+    document.getElementById('modoFocoOverlay').classList.remove('active');
+    focoState.running = false;
+    focoState.taskIdContexto = null;
+}
+
+async function iniciarFocoCustom() {
+    const minStr = prompt('Quantos minutos de foco?', '30');
+    const min = parseInt(minStr, 10);
+    if (!min || min < 1 || min > 240) return;
+    const pausaStr = prompt('Quantos minutos de pausa? (0 para sem pausa)', '5');
+    const pausa = parseInt(pausaStr, 10) || 0;
+    iniciarFoco(min, pausa, 'Personalizado');
+}
+
+function iniciarFoco(min, pausa, tecnica) {
+    focoState.duracaoFoco = min;
+    focoState.duracaoPausa = pausa;
+    focoState.tecnica = tecnica;
+    focoState.fase = 'foco';
+    focoState.minutosTotalSessao = 0;
+    document.getElementById('foco-tec-label').innerText = tecnica.toUpperCase();
+    document.getElementById('foco-setup').style.display = 'none';
+    document.getElementById('foco-running').style.display = 'block';
+    iniciarTimerFase(min);
+}
+
+function iniciarTimerFase(minutos) {
+    pararTimerFoco();
+    focoState.running = true; focoState.paused = false;
+    focoState.inicioMs = Date.now();
+    focoState.msAcumuladosFase = 0;
+    const totalMs = minutos * 60000;
+    document.getElementById('foco-fase').innerText = focoState.fase === 'foco' ? 'FOCO' : 'PAUSA';
+    document.getElementById('foco-fase').style.color = focoState.fase === 'foco' ? '#2563eb' : '#10b981';
+    document.getElementById('foco-pause-btn').innerText = '⏸ PAUSAR';
+
+    const tick = () => {
+        if (focoState.paused) return;
+        const decorrido = focoState.msAcumuladosFase + (Date.now() - focoState.inicioMs);
+        const restante = Math.max(0, totalMs - decorrido);
+        const m = Math.floor(restante / 60000);
+        const s = Math.floor((restante % 60000) / 1000);
+        document.getElementById('foco-timer-display').innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        const perc = ((totalMs - restante) / totalMs) * 100;
+        document.getElementById('foco-progress-fill').style.width = perc + '%';
+        if (restante <= 0) {
+            pararTimerFoco();
+            tocarSomFoco();
+            if (focoState.fase === 'foco') {
+                focoState.minutosTotalSessao += focoState.duracaoFoco;
+                if (focoState.duracaoPausa > 0) {
+                    focoState.fase = 'pausa';
+                    iniciarTimerFase(focoState.duracaoPausa);
+                } else {
+                    concluirSessaoFoco();
+                }
+            } else {
+                concluirSessaoFoco();
+            }
+        }
+    };
+    focoState.intervaloId = setInterval(tick, 250);
+    tick();
+}
+
+function pausarFoco() {
+    const btn = document.getElementById('foco-pause-btn');
+    if (focoState.paused) {
+        focoState.paused = false;
+        focoState.inicioMs = Date.now();
+        btn.innerText = '⏸ PAUSAR';
+    } else {
+        focoState.paused = true;
+        focoState.msAcumuladosFase += Date.now() - focoState.inicioMs;
+        btn.innerText = '▶ RETOMAR';
+    }
+}
+
+function pararTimerFoco() {
+    if (focoState.intervaloId) { clearInterval(focoState.intervaloId); focoState.intervaloId = null; }
+}
+
+function encerrarFoco() {
+    if (!confirm('Encerrar a sessão de foco agora?')) return;
+    pararTimerFoco();
+    if (focoState.fase === 'foco') {
+        const decorridoMs = focoState.msAcumuladosFase + (focoState.paused ? 0 : (Date.now() - focoState.inicioMs));
+        focoState.minutosTotalSessao += Math.floor(decorridoMs / 60000);
+    }
+    concluirSessaoFoco();
+}
+
+function concluirSessaoFoco() {
+    document.getElementById('foco-running').style.display = 'none';
+    document.getElementById('foco-done').style.display = 'block';
+    document.getElementById('foco-done-tempo').innerText = focoState.minutosTotalSessao || focoState.duracaoFoco;
+}
+
+async function registrarSessaoNoHistorico() {
+    if (!focoState.taskIdContexto) return fecharModoFoco();
+    const t = allTasks.find(x => x.id === focoState.taskIdContexto);
+    if (!t) return fecharModoFoco();
+    try {
+        await db.collection('tarefas').doc(focoState.taskIdContexto).update({
+            historico: firebase.firestore.FieldValue.arrayUnion({
+                data: new Date().toLocaleString('pt-BR'),
+                autor: 'SISTEMA',
+                texto: `${currentUserNome || currentUserEmail} concluiu uma sessão de Modo Foco (${focoState.tecnica}, ${focoState.minutosTotalSessao || focoState.duracaoFoco} min).`
+            })
+        });
+        toast('Sessão registrada no histórico.', 'success');
+    } catch (e) { console.error(e); }
+    fecharModoFoco();
+}
+
+function tocarSomFoco() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.frequency.value = 880; g.gain.value = 0.05;
+        o.start(); setTimeout(() => { o.frequency.value = 660; }, 200);
+        setTimeout(() => { o.stop(); ctx.close(); }, 500);
+    } catch (e) {}
 }
 
 // ==========================================================================

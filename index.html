@@ -459,6 +459,78 @@
                 </div>
             </details>
 
+            <!-- SUBTAREFAS / CHECKLIST -->
+            <details class="modal-accordion" id="modal-subtarefas">
+                <summary class="modal-accordion-summary">
+                    <span>Subtarefas <span class="modal-accordion-count" id="subtarefas-count"></span></span>
+                    <span class="modal-accordion-icon">▾</span>
+                </summary>
+                <div class="modal-accordion-body">
+                    <div id="subtarefas-list" class="subtarefas-list"></div>
+                    <div class="subtarefa-add">
+                        <input type="text" id="subtarefa-input" placeholder="Adicionar subtarefa..." onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarSubtarefa();}">
+                        <button onclick="adicionarSubtarefa()" class="btn-secondary">+ ADICIONAR</button>
+                    </div>
+                </div>
+            </details>
+
+            <!-- DEPENDÊNCIAS -->
+            <details class="modal-accordion" id="modal-dependencias">
+                <summary class="modal-accordion-summary">
+                    <span>Dependências <span class="modal-accordion-count" id="dependencias-count"></span></span>
+                    <span class="modal-accordion-icon">▾</span>
+                </summary>
+                <div class="modal-accordion-body">
+                    <p class="modal-helper">Esta tarefa só pode iniciar quando as tarefas abaixo forem concluídas.</p>
+                    <div id="dependencias-list" class="dependencias-list"></div>
+                    <div class="dependencia-add">
+                        <select id="dependencia-select"><option value="">Selecione uma tarefa que bloqueia esta...</option></select>
+                        <button onclick="adicionarDependencia()" class="btn-secondary">+ VINCULAR</button>
+                    </div>
+                </div>
+            </details>
+
+            <!-- LINKS DE REFERÊNCIA -->
+            <details class="modal-accordion" id="modal-links">
+                <summary class="modal-accordion-summary">
+                    <span>Links de referência <span class="modal-accordion-count" id="links-count"></span></span>
+                    <span class="modal-accordion-icon">▾</span>
+                </summary>
+                <div class="modal-accordion-body">
+                    <p class="modal-helper">Vincule documentos do Drive, planilhas, referências externas.</p>
+                    <div id="links-list" class="links-list"></div>
+                    <div class="link-add">
+                        <input type="text" id="link-label" placeholder="Rótulo (ex: Plano de ensino)">
+                        <input type="url" id="link-url" placeholder="https://...">
+                        <button onclick="adicionarLink()" class="btn-secondary">+ ADICIONAR</button>
+                    </div>
+                </div>
+            </details>
+
+            <!-- COMENTÁRIOS -->
+            <details class="modal-accordion" id="modal-comentarios">
+                <summary class="modal-accordion-summary">
+                    <span>Comentários <span class="modal-accordion-count" id="comentarios-count"></span></span>
+                    <span class="modal-accordion-icon">▾</span>
+                </summary>
+                <div class="modal-accordion-body">
+                    <div id="comentarios-list" class="comentarios-list"></div>
+                    <div class="comentario-add">
+                        <textarea id="comentario-input" placeholder="Escrever comentário... use @ para mencionar alguém" rows="2"></textarea>
+                        <div id="comentario-mention-suggestions" class="mention-suggestions"></div>
+                        <button onclick="adicionarComentario()" class="btn-primary">PUBLICAR COMENTÁRIO</button>
+                    </div>
+                </div>
+            </details>
+
+            <!-- BOTÃO MODO FOCO -->
+            <div class="modo-foco-launcher">
+                <button onclick="abrirModoFoco()" class="btn-foco">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+                    INICIAR MODO FOCO
+                </button>
+            </div>
+
             <button id="btn-interact" class="btn-primary" style="width: 100%; margin: 15px 0; font-size: 14px; padding: 12px; background-color: #0f172a;" onclick="revealInteractionPanel()">⚡ INTERAGIR COM A DEMANDA</button>
 
             <div id="interaction-panel" style="display: none; background: #eff6ff; padding: 15px; border: 1px solid #bfdbfe; border-radius: 6px; margin-top: 10px;">
@@ -559,6 +631,66 @@
             <div class="modal-footer" style="margin-top: 18px;">
                 <button onclick="fecharMeuPerfil()" class="btn-secondary" style="flex:1;">CANCELAR</button>
                 <button onclick="salvarMeuPerfil()" class="btn-primary" style="flex:2;">SALVAR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== MODO FOCO (overlay tela cheia) ===================== -->
+    <div id="modoFocoOverlay" class="foco-overlay" role="dialog" aria-modal="true" aria-label="Modo Foco">
+        <div class="foco-content">
+            <button onclick="fecharModoFoco()" class="foco-close" aria-label="Sair do modo foco">&times;</button>
+
+            <!-- Tela 1: Escolha de técnica -->
+            <div id="foco-setup" class="foco-screen">
+                <div class="foco-tag">MODO FOCO</div>
+                <h2 id="foco-titulo-tarefa">—</h2>
+                <p class="foco-sub">Escolha sua técnica de concentração</p>
+                <div class="foco-tecnicas">
+                    <button class="foco-tec-card" onclick="iniciarFoco(25, 5, 'Pomodoro Clássico')">
+                        <div class="foco-tec-tempo">25<span>min</span></div>
+                        <div class="foco-tec-nome">Pomodoro Clássico</div>
+                        <div class="foco-tec-pausa">+ pausa de 5 min</div>
+                    </button>
+                    <button class="foco-tec-card" onclick="iniciarFoco(50, 10, 'Pomodoro Estendido')">
+                        <div class="foco-tec-tempo">50<span>min</span></div>
+                        <div class="foco-tec-nome">Pomodoro Estendido</div>
+                        <div class="foco-tec-pausa">+ pausa de 10 min</div>
+                    </button>
+                    <button class="foco-tec-card" onclick="iniciarFoco(90, 0, 'Bloco Profundo')">
+                        <div class="foco-tec-tempo">90<span>min</span></div>
+                        <div class="foco-tec-nome">Bloco Profundo</div>
+                        <div class="foco-tec-pausa">sem pausa</div>
+                    </button>
+                    <button class="foco-tec-card foco-tec-custom" onclick="iniciarFocoCustom()">
+                        <div class="foco-tec-tempo">⚙️</div>
+                        <div class="foco-tec-nome">Personalizado</div>
+                        <div class="foco-tec-pausa">você define</div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tela 2: Timer rodando -->
+            <div id="foco-running" class="foco-screen" style="display:none;">
+                <div class="foco-tag" id="foco-tec-label">POMODORO CLÁSSICO</div>
+                <h2 id="foco-titulo-tarefa-running">—</h2>
+                <p id="foco-fase" class="foco-fase">FOCO</p>
+                <div class="foco-timer" id="foco-timer-display">25:00</div>
+                <div class="foco-progress"><div id="foco-progress-fill" class="foco-progress-fill"></div></div>
+                <div class="foco-actions">
+                    <button id="foco-pause-btn" onclick="pausarFoco()" class="btn-foco-action">⏸ PAUSAR</button>
+                    <button onclick="encerrarFoco()" class="btn-foco-action btn-foco-stop">■ ENCERRAR</button>
+                </div>
+            </div>
+
+            <!-- Tela 3: Concluído -->
+            <div id="foco-done" class="foco-screen" style="display:none;">
+                <div class="foco-celebrate">✓</div>
+                <h2>Sessão concluída</h2>
+                <p class="foco-sub">Bom trabalho. Você focou por <strong id="foco-done-tempo">25</strong> minutos em <strong id="foco-done-tarefa">—</strong>.</p>
+                <div class="foco-done-actions">
+                    <button onclick="registrarSessaoNoHistorico()" class="btn-primary">REGISTRAR NO HISTÓRICO</button>
+                    <button onclick="fecharModoFoco()" class="btn-secondary">FECHAR SEM REGISTRAR</button>
+                </div>
             </div>
         </div>
     </div>
