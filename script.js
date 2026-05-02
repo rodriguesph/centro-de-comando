@@ -118,6 +118,13 @@ function showSection(sec) {
     if (sec === 'admin') renderAdminPanel();
     if (sec === 'busca') executarBusca();
     if (sec === 'arquivo') renderArquivo();
+    if (sec === 'novo-projeto') {
+        // Renderiza listas avançadas (resetadas por padrão na primeira vez,
+        // mantém o que o usuário preencheu enquanto não publicou).
+        renderNovoSubtarefas();
+        renderNovoLinks();
+        renderNovoDeps();
+    }
 
     // Fechar menus abertos ao trocar de aba
     if (typeof fecharMobileMenu === 'function') fecharMobileMenu();
@@ -349,9 +356,9 @@ function renderHoje() {
 
     const validar = tasksGerencio.filter(t => t.status === 'aprovacao');
 
-    renderHojeColuna('hoje-list-agora', 'hoje-count-agora', agora);
-    renderHojeColuna('hoje-list-atraso', 'hoje-count-atraso', atrasadas);
-    renderHojeColuna('hoje-list-validar', 'hoje-count-validar', validar);
+    renderHojeColuna('hoje-list-agora', 'hoje-count-agora', agora, 'agora');
+    renderHojeColuna('hoje-list-atraso', 'hoje-count-atraso', atrasadas, 'atraso');
+    renderHojeColuna('hoje-list-validar', 'hoje-count-validar', validar, 'validar');
 
     const cardValidar = document.getElementById('hoje-card-validar');
     if (cardValidar) cardValidar.style.display = (currentUserRole === 'super-admin' || managedAreas.length > 0 || managedProjects.length > 0) ? 'block' : 'none';
@@ -360,7 +367,7 @@ function renderHoje() {
     if (resumo) resumo.style.display = (agora.length + atrasadas.length + validar.length) > 0 ? 'flex' : 'none';
 }
 
-function renderHojeColuna(listId, countId, tasks) {
+function renderHojeColuna(listId, countId, tasks, categoria) {
     const lista = document.getElementById(listId);
     const countEl = document.getElementById(countId);
     if (!lista) return;
@@ -374,7 +381,6 @@ function renderHojeColuna(listId, countId, tasks) {
     lista.innerHTML = tasks.map(t => {
         const cs = getCalculatedStatus(t);
         const prazo = t.data_fim ? t.data_fim.split('-').reverse().join('/') : '—';
-        const respNomes = t.resps && t.resps.length > 0 ? t.resps.map(r => r.nome.split(' ')[0]).join(', ') : '—';
         return `<div class="hoje-item" onclick="abrirModal('${t.id}')">
             <div class="hoje-item-title">${escapeHtml(t.text)}</div>
             <div class="hoje-item-meta">
@@ -383,8 +389,219 @@ function renderHojeColuna(listId, countId, tasks) {
                 <span class="status-pill ${cs.class}" style="font-size:9px;">${cs.label}</span>
             </div>
             ${renderTaskMetaIcons(t)}
+            ${renderHojeQuickActions(t, categoria)}
         </div>`;
     }).join('');
+}
+
+// Quick actions contextuais por categoria do Hoje
+function renderHojeQuickActions(t, categoria) {
+    let parts = [];
+    if (categoria === 'agora') {
+        if (t.status !== 'andamento') {
+            parts.push(`<button class="hoje-action hoje-action-primary" onclick="event.stopPropagation();quickIniciar('${t.id}')">▶ Iniciar</button>`);
+        }
+        parts.push(`<button class="hoje-action" onclick="event.stopPropagation();quickReportar('${t.id}')">💬 Reportar</button>`);
+    } else if (categoria === 'atraso') {
+        parts.push(`<button class="hoje-action" onclick="event.stopPropagation();quickReportar('${t.id}')">💬 Reportar</button>`);
+        parts.push(`<button class="hoje-action" onclick="event.stopPropagation();quickPedirPrazo('${t.id}')">📅 Pedir prazo</button>`);
+    } else if (categoria === 'validar') {
+        parts.push(`<button class="hoje-action hoje-action-success" onclick="event.stopPropagation();quickAprovar('${t.id}')">✓ Aprovar</button>`);
+        parts.push(`<button class="hoje-action hoje-action-warning" onclick="event.stopPropagation();quickDevolver('${t.id}')">↩ Devolver</button>`);
+    }
+    return parts.length > 0 ? `<div class="hoje-actions">${parts.join('')}</div>` : '';
+}
+
+// Mini-modal reutilizável para coletar texto rápido
+function abrirQuickPrompt(titulo, hint) {
+    return new Promise(resolve => {
+        document.getElementById('quick-prompt-title').textContent = titulo;
+        document.getElementById('quick-prompt-hint').textContent = hint;
+        const ta = document.getElementById('quick-prompt-textarea');
+        ta.value = '';
+        document.getElementById('quickPromptModal').classList.add('active');
+        setTimeout(() => ta.focus(), 100);
+        const cancel = () => { document.getElementById('quickPromptModal').classList.remove('active'); resolve(null); };
+        const ok = () => {
+            const v = ta.value.trim();
+            document.getElementById('quickPromptModal').classList.remove('active');
+            resolve(v || null);
+        };
+        document.getElementById('quick-prompt-cancel').onclick = cancel;
+        document.getElementById('quick-prompt-ok').onclick = ok;
+    });
+}
+
+// Quick: marcar Em Execução
+async function quickIniciar(taskId) {
+    const t = allTasks.find(x => x.id === taskId);
+    if (!t) return;
+    const abertas = dependenciasAbertas(t);
+    if (abertas.length > 0) {
+        return toast(`Bloqueado: ${abertas.length} dependência(s) ainda não concluída(s).`, 'warning', 5000);
+    }
+    try {
+        await db.collection('tarefas').doc(taskId).update({
+            status: 'andamento',
+            historico: firebase.firestore.FieldValue.arrayUnion({
+                data: new Date().toLocaleString('pt-BR'),
+                autor: 'SISTEMA',
+                texto: `${currentUserNome || currentUserEmail} marcou como Em Execução (Hoje · ação rápida)`
+            })
+        });
+        toast('Tarefa iniciada.', 'success');
+    } catch (e) { toast('Falha ao iniciar.', 'error'); }
+}
+
+// Quick: reportar progresso
+async function quickReportar(taskId) {
+    const t = allTasks.find(x => x.id === taskId);
+    if (!t) return;
+    const texto = await abrirQuickPrompt('Reportar progresso', 'Descreva o que avançou ou qual é o impedimento atual.');
+    if (!texto) return;
+    try {
+        const comentarios = Array.isArray(t.comentarios) ? [...t.comentarios] : [];
+        comentarios.push({
+            id: 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+            autor: currentUserEmail, texto,
+            criadoEm: new Date().toLocaleString('pt-BR'),
+            mencoes: []
+        });
+        await db.collection('tarefas').doc(taskId).update({ comentarios });
+
+        // Notificar gestor da área
+        const area = allAreasData.find(a => a.id === t.area);
+        const gestoresEmails = area && area.gestores ? area.gestores.filter(e => e !== currentUserEmail) : [];
+        if (gestoresEmails.length > 0) {
+            try {
+                const fn = functions.httpsCallable('sendNotification');
+                await fn({
+                    destinatarios: gestoresEmails,
+                    tipo: 'REPORTE',
+                    saudacao: '',
+                    mensagem: `${currentUserNome || currentUserEmail} reportou progresso na demanda **${t.text}** (${t.project}):\n\n"${texto}"`
+                });
+            } catch (notifErr) { console.warn('Notif reporte:', notifErr); }
+        }
+        toast('Reporte publicado.', 'success');
+    } catch (e) { toast('Falha ao reportar.', 'error'); }
+}
+
+// Quick: pedir novo prazo (cria comentário + notifica gestor)
+async function quickPedirPrazo(taskId) {
+    const t = allTasks.find(x => x.id === taskId);
+    if (!t) return;
+    const texto = await abrirQuickPrompt('Pedir novo prazo', 'Qual prazo você precisa e por quê?');
+    if (!texto) return;
+    try {
+        const area = allAreasData.find(a => a.id === t.area);
+        const gestoresEmails = area && area.gestores ? area.gestores : [];
+        const mencoes = gestoresEmails.map(em => {
+            const u = allUsers.find(x => x.email === em);
+            return u ? '@' + u.nome.split(' ')[0] : '';
+        }).filter(Boolean).join(' ');
+
+        const textoFinal = `📅 Pedido de novo prazo. ${mencoes}\n\n${texto}`;
+        const comentarios = Array.isArray(t.comentarios) ? [...t.comentarios] : [];
+        comentarios.push({
+            id: 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+            autor: currentUserEmail, texto: textoFinal,
+            criadoEm: new Date().toLocaleString('pt-BR'),
+            mencoes: gestoresEmails
+        });
+        await db.collection('tarefas').doc(taskId).update({ comentarios });
+
+        if (gestoresEmails.length > 0) {
+            try {
+                const fn = functions.httpsCallable('sendNotification');
+                await fn({
+                    destinatarios: gestoresEmails.filter(e => e !== currentUserEmail),
+                    tipo: 'PEDIDO DE NOVO PRAZO',
+                    saudacao: '',
+                    mensagem: `${currentUserNome || currentUserEmail} solicita um novo prazo na demanda **${t.text}** (${t.project}):\n\n"${texto}"`
+                });
+            } catch (notifErr) { console.warn('Notif prazo:', notifErr); }
+        }
+        toast('Pedido de prazo enviado ao gestor.', 'success');
+    } catch (e) { toast('Falha ao enviar pedido.', 'error'); }
+}
+
+// Quick: aprovar (gestor concluindo demanda em validação)
+async function quickAprovar(taskId) {
+    const t = allTasks.find(x => x.id === taskId);
+    if (!t) return;
+    const ok = await vetorConfirm(`Aprovar e concluir a demanda "${t.text}"?`, 'Aprovar demanda');
+    if (!ok) return;
+    try {
+        await db.collection('tarefas').doc(taskId).update({
+            status: 'concluido',
+            historico: firebase.firestore.FieldValue.arrayUnion({
+                data: new Date().toLocaleString('pt-BR'),
+                autor: 'SISTEMA',
+                texto: `${currentUserNome || currentUserEmail} aprovou e concluiu (Hoje · ação rápida)`
+            })
+        });
+
+        // Notificar executores
+        const executoresEmails = (t.resps || []).map(r => r.email).filter(e => e !== currentUserEmail);
+        if (executoresEmails.length > 0) {
+            try {
+                const fn = functions.httpsCallable('sendNotification');
+                await fn({
+                    destinatarios: executoresEmails,
+                    tipo: 'DEMANDA APROVADA',
+                    saudacao: '',
+                    mensagem: `Sua demanda **${t.text}** (${t.project}) foi aprovada e marcada como concluída por ${currentUserNome || currentUserEmail}.`
+                });
+            } catch (notifErr) { console.warn('Notif aprovação:', notifErr); }
+        }
+        toast('Demanda aprovada e concluída.', 'success');
+    } catch (e) { toast('Falha ao aprovar.', 'error'); }
+}
+
+// Quick: devolver para Em Execução com comentário
+async function quickDevolver(taskId) {
+    const t = allTasks.find(x => x.id === taskId);
+    if (!t) return;
+    const texto = await abrirQuickPrompt('Devolver com comentário', 'Por que você está devolvendo? O que precisa ser ajustado?');
+    if (!texto) return;
+    try {
+        const executoresEmails = (t.resps || []).filter(r => r.papel === 'executor').map(r => r.email);
+        const mencoes = executoresEmails.map(em => {
+            const u = allUsers.find(x => x.email === em);
+            return u ? '@' + u.nome.split(' ')[0] : '';
+        }).filter(Boolean).join(' ');
+
+        const comentarios = Array.isArray(t.comentarios) ? [...t.comentarios] : [];
+        comentarios.push({
+            id: 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+            autor: currentUserEmail,
+            texto: `↩ Devolvido pelo gestor. ${mencoes}\n\n${texto}`,
+            criadoEm: new Date().toLocaleString('pt-BR'),
+            mencoes: executoresEmails
+        });
+        await db.collection('tarefas').doc(taskId).update({
+            status: 'andamento',
+            comentarios,
+            historico: firebase.firestore.FieldValue.arrayUnion({
+                data: new Date().toLocaleString('pt-BR'),
+                autor: 'SISTEMA',
+                texto: `${currentUserNome || currentUserEmail} devolveu para Em Execução: ${texto.slice(0, 80)}${texto.length > 80 ? '...' : ''}`
+            })
+        });
+        if (executoresEmails.length > 0) {
+            try {
+                const fn = functions.httpsCallable('sendNotification');
+                await fn({
+                    destinatarios: executoresEmails.filter(e => e !== currentUserEmail),
+                    tipo: 'DEMANDA DEVOLVIDA',
+                    saudacao: '',
+                    mensagem: `${currentUserNome || currentUserEmail} devolveu a demanda **${t.text}** (${t.project}) com a observação:\n\n"${texto}"`
+                });
+            } catch (notifErr) { console.warn('Notif devolver:', notifErr); }
+        }
+        toast('Demanda devolvida ao executor.', 'success');
+    } catch (e) { toast('Falha ao devolver.', 'error'); }
 }
 
 function escapeHtml(s) {
@@ -766,6 +983,141 @@ function tratarSelecaoProjetoNovo() {
     else { projInput.style.display = 'none'; projInput.value = ''; }
 }
 
+// Estado temporário do formulário de Nova Demanda (subtarefas/deps/links iniciais)
+let newDemandSubtarefas = [];
+let newDemandLinks = [];
+let newDemandDeps = [];
+
+function renderNovoSubtarefas() {
+    const list = document.getElementById('novo-subtarefas-list');
+    if (!list) return;
+    if (newDemandSubtarefas.length === 0) {
+        list.innerHTML = '<p class="empty-hint" style="font-size:11px;padding:8px">Nenhuma subtarefa adicionada.</p>';
+        return;
+    }
+    list.innerHTML = newDemandSubtarefas.map(s => `
+        <div class="subtarefa-item">
+            <input type="checkbox" disabled>
+            <span class="subtarefa-texto">${escapeHtml(s.texto)}</span>
+            <button class="subtarefa-remove" type="button" onclick="removerSubtarefaNovo('${s.id}')" aria-label="Remover">&times;</button>
+        </div>
+    `).join('');
+}
+
+function adicionarSubtarefaNovo() {
+    const input = document.getElementById('novo-subtarefa-input');
+    const texto = input.value.trim();
+    if (!texto) return;
+    newDemandSubtarefas.push({
+        id: 'sub_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        texto, concluida: false,
+        criadoPor: currentUserEmail,
+        criadoEm: new Date().toLocaleString('pt-BR')
+    });
+    input.value = '';
+    renderNovoSubtarefas();
+}
+
+function removerSubtarefaNovo(id) {
+    newDemandSubtarefas = newDemandSubtarefas.filter(s => s.id !== id);
+    renderNovoSubtarefas();
+}
+
+function renderNovoLinks() {
+    const list = document.getElementById('novo-links-list');
+    if (!list) return;
+    if (newDemandLinks.length === 0) {
+        list.innerHTML = '<p class="empty-hint" style="font-size:11px;padding:8px">Nenhum link adicionado.</p>';
+        return;
+    }
+    list.innerHTML = newDemandLinks.map(l => `
+        <div class="link-item">
+            <a href="${escapeHtml(l.url)}" target="_blank" rel="noopener" class="link-anchor">
+                <strong>${escapeHtml(l.label || 'Link')}</strong>
+                <small>${escapeHtml(l.url.length > 40 ? l.url.slice(0, 40) + '...' : l.url)}</small>
+            </a>
+            <button class="link-remove" type="button" onclick="removerLinkNovo('${l.id}')">&times;</button>
+        </div>
+    `).join('');
+}
+
+function adicionarLinkNovo() {
+    const labelInput = document.getElementById('novo-link-label');
+    const urlInput = document.getElementById('novo-link-url');
+    const label = labelInput.value.trim();
+    const url = urlInput.value.trim();
+    if (!url) return toast('Informe a URL.', 'warning');
+    try { new URL(url); } catch (e) { return toast('URL inválida.', 'warning'); }
+    newDemandLinks.push({
+        id: 'lk_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        label: label || 'Link', url
+    });
+    labelInput.value = ''; urlInput.value = '';
+    renderNovoLinks();
+}
+
+function removerLinkNovo(id) {
+    newDemandLinks = newDemandLinks.filter(l => l.id !== id);
+    renderNovoLinks();
+}
+
+function renderNovoDeps() {
+    const list = document.getElementById('novo-deps-list');
+    const select = document.getElementById('novo-dep-select');
+    if (!list || !select) return;
+
+    if (newDemandDeps.length === 0) {
+        list.innerHTML = '<p class="empty-hint" style="font-size:11px;padding:8px">Nenhuma dependência vinculada.</p>';
+    } else {
+        list.innerHTML = newDemandDeps.map(taskId => {
+            const dep = allTasks.find(x => x.id === taskId);
+            if (!dep) return '';
+            const cs = getCalculatedStatus(dep);
+            return `<div class="dependencia-item dep-aberta">
+                <span class="dep-icon">⏳</span>
+                <div class="dep-info">
+                    <strong>${escapeHtml(dep.text)}</strong>
+                    <small>${escapeHtml(dep.project)} · <span class="status-pill ${cs.class}" style="font-size:9px;">${cs.label}</span></small>
+                </div>
+                <button class="dependencia-remove" type="button" onclick="removerDepNovo('${taskId}')">&times;</button>
+            </div>`;
+        }).join('');
+    }
+
+    // Popular select
+    const ja = new Set(newDemandDeps);
+    const candidatas = getVisibleTasksBoard()
+        .filter(x => !ja.has(x.id) && x.status !== 'concluido')
+        .sort((a, b) => a.text.localeCompare(b.text));
+    let html = '<option value="">Selecione uma tarefa que bloqueia esta...</option>';
+    candidatas.forEach(c => { html += `<option value="${c.id}">${escapeHtml(c.project)} · ${escapeHtml(c.text)}</option>`; });
+    select.innerHTML = html;
+}
+
+function adicionarDepNovo() {
+    const select = document.getElementById('novo-dep-select');
+    const v = select.value;
+    if (!v) return;
+    if (newDemandDeps.includes(v)) return;
+    newDemandDeps.push(v);
+    renderNovoDeps();
+}
+
+function removerDepNovo(taskId) {
+    newDemandDeps = newDemandDeps.filter(d => d !== taskId);
+    renderNovoDeps();
+}
+
+// Reset estado ao trocar para a aba Nova Demanda
+function resetNewDemandState() {
+    newDemandSubtarefas = [];
+    newDemandLinks = [];
+    newDemandDeps = [];
+    renderNovoSubtarefas();
+    renderNovoLinks();
+    renderNovoDeps();
+}
+
 async function saveDemand() {
     const area = document.getElementById('areaInput').value;
     const projSelectVal = document.getElementById('projectSelect').value;
@@ -791,14 +1143,19 @@ async function saveDemand() {
         const batch = db.batch();
         for (const r of resps) {
             const newDocRef = db.collection('tarefas').doc();
-            batch.set(newDocRef, {
+            const docData = {
                 area, project, text: title, descricao: desc, data_inicio: dateStart, data_fim: dateEnd,
                 status: 'fazer', prioridade,
                 resps: [r],
-                resp_emails: [r.email], // desnormalizado para Security Rules
+                resp_emails: [r.email],
                 criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
                 historico: [], email: r.email, criadoPor: currentUserEmail
-            });
+            };
+            // Campos avançados (se preenchidos no formulário)
+            if (newDemandSubtarefas.length > 0) docData.subtarefas = newDemandSubtarefas.map(s => ({...s, id: 'sub_' + Date.now() + '_' + Math.random().toString(36).slice(2,6)}));
+            if (newDemandLinks.length > 0) docData.links = newDemandLinks.map(l => ({...l, id: 'lk_' + Date.now() + '_' + Math.random().toString(36).slice(2,6)}));
+            if (newDemandDeps.length > 0) docData.bloqueadaPor = [...newDemandDeps];
+            batch.set(newDocRef, docData);
         }
         await batch.commit();
 
@@ -821,6 +1178,7 @@ async function saveDemand() {
         document.getElementById('taskDesc').value = '';
         document.getElementById('responsaveis-container').innerHTML = '';
         addResponsavelField('responsaveis-container');
+        resetNewDemandState();
         showSection('acompanhamento');
     } catch (e) {
         console.error(e);
@@ -1323,6 +1681,8 @@ async function saveModalChanges() {
     const currentResps = isGestorPleno ? coletarEquipeDeContainer('edit-responsaveis-container') : t.resps;
 
     let hasAnyChange = false;
+    let respsAlterado = false;
+    let novosRespAdicionados = []; // pessoas adicionadas nesta edição (notificar)
     if (report !== "") hasAnyChange = true;
     if (currentStatus !== t.status) hasAnyChange = true;
     if (isGestorPleno) {
@@ -1332,7 +1692,12 @@ async function saveModalChanges() {
         if (currentPrio !== (t.prioridade || 'media')) hasAnyChange = true;
         const cRespsStr = JSON.stringify(currentResps.map(r => r.email).sort());
         const tRespsStr = JSON.stringify((t.resps || []).map(r => r.email).sort());
-        if (cRespsStr !== tRespsStr) hasAnyChange = true;
+        if (cRespsStr !== tRespsStr) {
+            hasAnyChange = true;
+            respsAlterado = true;
+            const antigosEmails = (t.resps || []).map(r => r.email);
+            novosRespAdicionados = currentResps.filter(r => !antigosEmails.includes(r.email));
+        }
     }
 
     if (!hasAnyChange) {
@@ -1394,6 +1759,25 @@ async function saveModalChanges() {
                     });
                 } catch (e) { console.warn('Notificação não enviada:', e); }
             }
+        }
+
+        // Notificação específica para responsáveis que foram ADICIONADOS nesta edição.
+        if (novosRespAdicionados.length > 0) {
+            try {
+                const fn = functions.httpsCallable('sendNotification');
+                await fn({
+                    destinatarios: novosRespAdicionados.map(r => r.email).filter(e => e !== currentUserEmail),
+                    tipo: 'NOVA ATRIBUIÇÃO',
+                    saudacao: '',
+                    mensagem: `Você foi atribuído a uma demanda existente no Vetor:\n\n` +
+                              `**${update.text || t.text}**\n` +
+                              `Projeto: ${t.project}\n` +
+                              `Área: ${t.area || 'Sem área'}\n` +
+                              `Prazo: ${update.data_fim || t.data_fim || '—'}\n` +
+                              `Atribuído por: ${currentUserNome || currentUserEmail}\n\n` +
+                              `Acesse o Vetor para ver os detalhes.`
+                });
+            } catch (e) { console.warn('Notificação nova atribuição:', e); }
         }
         closeModal();
         toast('Alterações salvas.', 'success');
@@ -2349,23 +2733,38 @@ async function cobrarComIA() {
 // ==========================================================================
 // 15. SUBTAREFAS / CHECKLIST
 // ==========================================================================
+// Helper: verifica se usuário é gestor pleno da tarefa específica
+function isGestorPlenoOf(t) {
+    return currentUserRole === 'super-admin' ||
+           (t.area && managedAreas.includes(t.area)) ||
+           managedProjects.includes(t.project);
+}
+
 function renderSubtarefas(t) {
     const list = document.getElementById('subtarefas-list');
     const count = document.getElementById('subtarefas-count');
     if (!list) return;
     const subs = t.subtarefas || [];
     const concluidas = subs.filter(s => s.concluida).length;
-    count.textContent = subs.length > 0 ? `(${concluidas}/${subs.length})` : '';
+    if (count) count.textContent = subs.length > 0 ? `(${concluidas}/${subs.length})` : '';
+
+    const isGestor = isGestorPlenoOf(t);
+
+    // Toggle visual da área de adicionar (só gestor pode incluir/remover)
+    const addArea = document.querySelector('#taskModal .subtarefa-add');
+    if (addArea) addArea.style.display = isGestor ? 'flex' : 'none';
 
     if (subs.length === 0) {
-        list.innerHTML = '<p class="empty-hint">Nenhuma subtarefa. Adicione abaixo para quebrar essa demanda em passos.</p>';
+        list.innerHTML = isGestor
+            ? '<p class="empty-hint">Nenhuma subtarefa. Adicione abaixo para quebrar essa demanda em passos.</p>'
+            : '<p class="empty-hint">O gestor ainda não definiu subtarefas para esta demanda.</p>';
         return;
     }
     list.innerHTML = subs.map(s => `
         <div class="subtarefa-item ${s.concluida ? 'done' : ''}">
             <input type="checkbox" ${s.concluida ? 'checked' : ''} onchange="toggleSubtarefa('${s.id}')">
             <span class="subtarefa-texto">${escapeHtml(s.texto)}</span>
-            <button class="subtarefa-remove" onclick="removerSubtarefa('${s.id}')" aria-label="Remover">&times;</button>
+            ${isGestor ? `<button class="subtarefa-remove" onclick="removerSubtarefa('${s.id}')" aria-label="Remover">&times;</button>` : ''}
         </div>
     `).join('');
 }
@@ -2421,14 +2820,20 @@ function renderDependencias(t) {
     });
     count.textContent = deps.length > 0 ? `(${depsAbertas.length} em aberto / ${deps.length})` : '';
 
+    const isGestor = isGestorPlenoOf(t);
+    const addArea = document.querySelector('#taskModal .dependencia-add');
+    if (addArea) addArea.style.display = isGestor ? 'flex' : 'none';
+
     if (deps.length === 0) {
-        list.innerHTML = '<p class="empty-hint">Esta tarefa não depende de nenhuma outra.</p>';
+        list.innerHTML = isGestor
+            ? '<p class="empty-hint">Esta tarefa não depende de nenhuma outra.</p>'
+            : '<p class="empty-hint">O gestor ainda não definiu dependências para esta demanda.</p>';
     } else {
         list.innerHTML = deps.map(taskId => {
             const dep = allTasks.find(x => x.id === taskId);
             if (!dep) return `<div class="dependencia-item dep-orfa">
                 <span>⚠ Tarefa #${taskId.slice(0,6)}... (não encontrada)</span>
-                <button class="dependencia-remove" onclick="removerDependencia('${taskId}')">&times;</button>
+                ${isGestor ? `<button class="dependencia-remove" onclick="removerDependencia('${taskId}')">&times;</button>` : ''}
             </div>`;
             const cs = getCalculatedStatus(dep);
             const concluida = dep.status === 'concluido';
@@ -2438,22 +2843,23 @@ function renderDependencias(t) {
                     <strong>${escapeHtml(dep.text)}</strong>
                     <small>${escapeHtml(dep.project)} · <span class="status-pill ${cs.class}" style="font-size:9px;">${cs.label}</span></small>
                 </div>
-                <button class="dependencia-remove" onclick="removerDependencia('${taskId}')" aria-label="Remover">&times;</button>
+                ${isGestor ? `<button class="dependencia-remove" onclick="removerDependencia('${taskId}')" aria-label="Remover">&times;</button>` : ''}
             </div>`;
         }).join('');
     }
 
-    // Popular o select com tarefas disponíveis para vincular como bloqueio
-    const bloqueadasJa = new Set(deps);
-    bloqueadasJa.add(currentTaskId); // não pode bloquear a si mesma
-    const candidatas = getVisibleTasksBoard()
-        .filter(x => !bloqueadasJa.has(x.id) && x.status !== 'concluido')
-        .sort((a, b) => a.text.localeCompare(b.text));
-    let html = '<option value="">Selecione uma tarefa que bloqueia esta...</option>';
-    candidatas.forEach(c => {
-        html += `<option value="${c.id}">${escapeHtml(c.project)} · ${escapeHtml(c.text)}</option>`;
-    });
-    select.innerHTML = html;
+    if (isGestor) {
+        const bloqueadasJa = new Set(deps);
+        bloqueadasJa.add(currentTaskId);
+        const candidatas = getVisibleTasksBoard()
+            .filter(x => !bloqueadasJa.has(x.id) && x.status !== 'concluido')
+            .sort((a, b) => a.text.localeCompare(b.text));
+        let html = '<option value="">Selecione uma tarefa que bloqueia esta...</option>';
+        candidatas.forEach(c => {
+            html += `<option value="${c.id}">${escapeHtml(c.project)} · ${escapeHtml(c.text)}</option>`;
+        });
+        select.innerHTML = html;
+    }
 }
 
 async function adicionarDependencia() {
@@ -2494,10 +2900,16 @@ function renderLinks(t) {
     const count = document.getElementById('links-count');
     if (!list) return;
     const links = t.links || [];
-    count.textContent = links.length > 0 ? `(${links.length})` : '';
+    if (count) count.textContent = links.length > 0 ? `(${links.length})` : '';
+
+    const isGestor = isGestorPlenoOf(t);
+    const addArea = document.querySelector('#taskModal .link-add');
+    if (addArea) addArea.style.display = isGestor ? 'flex' : 'none';
 
     if (links.length === 0) {
-        list.innerHTML = '<p class="empty-hint">Nenhum link vinculado.</p>';
+        list.innerHTML = isGestor
+            ? '<p class="empty-hint">Nenhum link vinculado. Adicione abaixo.</p>'
+            : '<p class="empty-hint">Nenhum link de referência foi vinculado pelo gestor.</p>';
         return;
     }
     list.innerHTML = links.map(l => `
@@ -2507,7 +2919,7 @@ function renderLinks(t) {
                 <strong>${escapeHtml(l.label || 'Link')}</strong>
                 <small>${escapeHtml(l.url.length > 40 ? l.url.slice(0, 40) + '...' : l.url)}</small>
             </a>
-            <button class="link-remove" onclick="removerLink('${l.id}')" aria-label="Remover">&times;</button>
+            ${isGestor ? `<button class="link-remove" onclick="removerLink('${l.id}')" aria-label="Remover">&times;</button>` : ''}
         </div>
     `).join('');
 }
@@ -3046,19 +3458,29 @@ async function migrarUsuariosParaEmailId() {
 }
 
 // Migração one-shot: preenche resp_emails (campo desnormalizado para Security Rules)
-// para tarefas antigas que não tinham. Só super-admin dispara.
+// para tarefas antigas. Roda em todo gestor (super-admin ou gestor de área),
+// limitada às tarefas que ele tem permissão de escrever.
 let migracaoRespEmailsRan = false;
 async function migrarRespEmails() {
     if (migracaoRespEmailsRan) return;
-    if (currentUserRole !== 'super-admin') return;
+    if (!currentUserEmail) return;
     migracaoRespEmailsRan = true;
 
-    const candidatas = allTasks.filter(t => {
+    // Quais tarefas o usuário pode atualizar (atende às Security Rules)
+    let tarefasEscrever = [];
+    if (currentUserRole === 'super-admin') {
+        tarefasEscrever = allTasks;
+    } else if (managedAreas.length > 0) {
+        tarefasEscrever = allTasks.filter(t => managedAreas.includes(t.area));
+    } else {
+        return; // executor não tenta migrar
+    }
+
+    const candidatas = tarefasEscrever.filter(t => {
         const respsArr = Array.isArray(t.resps) ? t.resps : [];
         const expectedEmails = respsArr.map(r => r && r.email).filter(Boolean);
         const currentEmails = Array.isArray(t.resp_emails) ? t.resp_emails : null;
-        if (currentEmails === null) return expectedEmails.length >= 0; // sempre que faltar campo
-        // Se já existe, conferir se está em sincronia
+        if (currentEmails === null) return true;
         if (currentEmails.length !== expectedEmails.length) return true;
         const a = [...currentEmails].sort();
         const b = [...expectedEmails].sort();
@@ -3068,7 +3490,6 @@ async function migrarRespEmails() {
     if (candidatas.length === 0) return;
 
     try {
-        // Lotes de 400 (limite Firestore = 500 por batch)
         for (let i = 0; i < candidatas.length; i += 400) {
             const lote = candidatas.slice(i, i + 400);
             const batch = db.batch();

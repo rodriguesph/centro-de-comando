@@ -98,6 +98,23 @@ body { font-family: var(--font-family); background: var(--bg-body); color: var(-
 .hoje-item-title { font-size: 12px; font-weight: 700; color: var(--text-main); margin-bottom: 3px; }
 .hoje-item-meta { font-size: 10px; color: var(--text-muted); display: flex; gap: 10px; }
 .hoje-item-empty { font-size: 12px; color: #94a3b8; font-style: italic; padding: 20px; text-align: center; }
+.hoje-actions {
+    display: flex; gap: 6px; margin-top: 8px;
+    padding-top: 8px; border-top: 1px dashed var(--border-color);
+}
+.hoje-action {
+    flex: 1; padding: 7px 10px; font-size: 11px; font-weight: 700;
+    background: #fff; border: 1px solid var(--border-color); border-radius: 6px;
+    cursor: pointer; transition: all 0.15s;
+    font-family: var(--font-family); white-space: nowrap;
+}
+.hoje-action:hover { border-color: var(--vetor-blue); color: var(--vetor-blue); transform: translateY(-1px); }
+.hoje-action-primary { background: var(--vetor-blue); color: #fff; border-color: var(--vetor-blue); }
+.hoje-action-primary:hover { background: var(--vetor-blue-dark); color: #fff; }
+.hoje-action-success { background: #10b981; color: #fff; border-color: #10b981; }
+.hoje-action-success:hover { background: #059669; color: #fff; border-color: #059669; }
+.hoje-action-warning { background: #fffbeb; color: #b45309; border-color: #fde68a; }
+.hoje-action-warning:hover { background: #fef3c7; color: #92400e; }
 .hoje-resumo { background: linear-gradient(135deg, #1e3a8a 0%, var(--vetor-blue) 100%); color: #fff; padding: 18px 22px; border-radius: var(--radius); display: flex; align-items: center; gap: 16px; }
 .hoje-resumo-icon { font-size: 28px; }
 .hoje-resumo-body { flex: 1; display: flex; flex-direction: column; }
@@ -298,9 +315,20 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--v
 .btn-remove-resp { background: none; border: none; color: var(--danger); font-size: 16px; cursor: pointer; padding: 0 5px; font-weight: bold; }
 
 /* ===================== CADASTRO POR VOZ ===================== */
-.voz-instrucao { background: var(--vetor-blue-light); padding: 14px 16px; border-radius: var(--radius); margin-bottom: 18px; }
-.voz-instrucao p { font-size: 12px; color: #1e3a8a; }
-.voz-exemplo { font-style: italic; margin-top: 6px; color: #1e40af; font-weight: 500; }
+.voz-instrucao { background: var(--vetor-blue-light); padding: 16px 18px; border-radius: var(--radius); margin-bottom: 18px; border-left: 3px solid var(--vetor-blue); }
+.voz-instrucao p { font-size: 12px; color: #1e3a8a; line-height: 1.5; }
+.voz-checklist { list-style: none; padding: 0; margin: 12px 0 0; }
+.voz-checklist li { font-size: 12px; color: #1e3a8a; padding: 6px 0 6px 24px; position: relative; line-height: 1.5; }
+.voz-checklist li::before { content: '✓'; position: absolute; left: 0; top: 6px; color: var(--vetor-blue); font-weight: 800; font-size: 14px; }
+.voz-checklist li em { color: #2563eb; font-style: italic; }
+.voz-checklist li small { color: #64748b; font-weight: 500; }
+.voz-exemplo-details { margin-top: 10px; }
+.voz-exemplo-details summary { font-size: 11px; color: #2563eb; font-weight: 700; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 0; }
+.voz-exemplo-details summary:hover { color: var(--vetor-blue-dark); }
+.voz-exemplo-details summary::-webkit-details-marker { display: none; }
+.voz-exemplo-details summary::before { content: '▸ '; transition: transform 0.2s; display: inline-block; }
+.voz-exemplo-details[open] summary::before { content: '▾ '; }
+.voz-exemplo { font-style: italic; margin-top: 8px; color: #1e40af; font-weight: 500; padding: 10px 12px; background: #fff; border-radius: 4px; line-height: 1.55; }
 .voz-mic-area { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 30px 0; border: 2px dashed var(--border-color); border-radius: var(--radius); margin-bottom: 18px; }
 .voz-mic-btn { width: 80px; height: 80px; border-radius: 50%; border: none; background: var(--vetor-blue); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.15s, background 0.15s, box-shadow 0.15s; }
 .voz-mic-btn:hover { transform: scale(1.05); background: var(--vetor-blue-dark); box-shadow: var(--shadow-md); }
@@ -644,7 +672,13 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--v
     cursor: pointer; padding: 0 6px;
 }
 .link-remove:hover { color: var(--danger); }
-.link-add { display: grid; grid-template-columns: 1fr 2fr auto; gap: 8px; }
+.link-add {
+    display: flex; flex-direction: column;
+    background: #f8fafc; border: 1px solid var(--border-color);
+    border-radius: 8px; padding: 14px;
+}
+.link-add .form-group label { font-size: 11px; }
+.link-add input { background: #fff; }
 
 /* Comentários */
 .comentarios-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; max-height: 280px; overflow-y: auto; padding-right: 4px; }

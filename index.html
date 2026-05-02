@@ -277,6 +277,52 @@
                         <div class="form-group"><label>Início</label><input type="date" id="dateInputStart"></div>
                         <div class="form-group"><label>Prazo Final</label><input type="date" id="dateInputEnd"></div>
                     </div>
+
+                    <details class="modal-accordion" style="margin-top: 14px;">
+                        <summary class="modal-accordion-summary">
+                            <span>Configurações avançadas (subtarefas, dependências, links)</span>
+                            <span class="modal-accordion-icon">▾</span>
+                        </summary>
+                        <div class="modal-accordion-body">
+                            <!-- Subtarefas iniciais -->
+                            <div class="form-group">
+                                <label>Subtarefas iniciais</label>
+                                <div id="novo-subtarefas-list" class="subtarefas-list" style="margin-bottom:8px"></div>
+                                <div class="subtarefa-add">
+                                    <input type="text" id="novo-subtarefa-input" placeholder="Adicionar subtarefa..." onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarSubtarefaNovo();}">
+                                    <button type="button" onclick="adicionarSubtarefaNovo()" class="btn-secondary">+ ADICIONAR</button>
+                                </div>
+                            </div>
+
+                            <!-- Dependências -->
+                            <div class="form-group">
+                                <label>Dependências <small style="font-weight:400;color:#94a3b8">(tarefas que precisam terminar antes desta)</small></label>
+                                <div id="novo-deps-list" class="dependencias-list" style="margin-bottom:8px"></div>
+                                <div class="dependencia-add">
+                                    <select id="novo-dep-select"><option value="">Selecione uma tarefa que bloqueia esta...</option></select>
+                                    <button type="button" onclick="adicionarDepNovo()" class="btn-secondary">+ VINCULAR</button>
+                                </div>
+                            </div>
+
+                            <!-- Links -->
+                            <div class="form-group">
+                                <label>Links de referência</label>
+                                <div id="novo-links-list" class="links-list" style="margin-bottom:8px"></div>
+                                <div class="link-add">
+                                    <div class="form-group" style="margin-bottom:8px">
+                                        <label>Rótulo <small style="font-weight:400;color:#94a3b8">(opcional)</small></label>
+                                        <input type="text" id="novo-link-label" placeholder="Ex: Plano de ensino, Edital MEC...">
+                                    </div>
+                                    <div class="form-group" style="margin-bottom:10px">
+                                        <label>URL</label>
+                                        <input type="url" id="novo-link-url" placeholder="https://docs.google.com/...">
+                                    </div>
+                                    <button type="button" onclick="adicionarLinkNovo()" class="btn-primary" style="width:100%">+ ADICIONAR LINK</button>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+
                     <button onclick="saveDemand()" class="btn-primary" style="width: 100%; margin-top: 20px;">LANÇAR DEMANDA</button>
                 </div>
             </section>
@@ -513,9 +559,15 @@
                     <p class="modal-helper">Vincule documentos do Drive, planilhas e referências externas.</p>
                     <div id="links-list" class="links-list"></div>
                     <div class="link-add">
-                        <input type="text" id="link-label" placeholder="Rótulo (ex: Plano de ensino)">
-                        <input type="url" id="link-url" placeholder="https://...">
-                        <button onclick="adicionarLink()" class="btn-secondary">+ ADICIONAR</button>
+                        <div class="form-group" style="margin-bottom:8px">
+                            <label>Rótulo <small style="font-weight:400;color:#94a3b8">(opcional)</small></label>
+                            <input type="text" id="link-label" placeholder="Ex: Plano de ensino, Edital MEC, Referência...">
+                        </div>
+                        <div class="form-group" style="margin-bottom:10px">
+                            <label>URL</label>
+                            <input type="url" id="link-url" placeholder="https://docs.google.com/...">
+                        </div>
+                        <button onclick="adicionarLink()" class="btn-primary" style="width:100%">+ ADICIONAR LINK</button>
                     </div>
                 </div>
 
@@ -570,8 +622,19 @@
             <div class="modal-header"><h3>Cadastro por Voz</h3><button onclick="fecharCadastroVoz()" class="close-btn" aria-label="Fechar">&times;</button></div>
 
             <div class="voz-instrucao">
-                <p><strong>Fale como se estivesse pedindo para um assistente:</strong></p>
-                <p class="voz-exemplo">"Cria uma demanda na área Comercial, projeto Renovação Cliente X, tarefa de revisar o contrato e enviar até sexta, responsável João como executor e Paulo como gestor."</p>
+                <p><strong>Fale como se estivesse pedindo para um assistente.</strong> Para um cadastro completo, mencione:</p>
+                <ul class="voz-checklist">
+                    <li><strong>Área Estratégica</strong> — qual área da operação (ex: <em>"na área Comercial"</em>)</li>
+                    <li><strong>Projeto</strong> — pode ser existente ou novo (ex: <em>"projeto Renovação Cliente X"</em>)</li>
+                    <li><strong>Tarefa</strong> — o que precisa ser feito (ex: <em>"tarefa de revisar e enviar o contrato"</em>)</li>
+                    <li><strong>Responsável</strong> — pessoa atribuída (ex: <em>"responsável João como executor"</em>)</li>
+                    <li><strong>Prazo</strong> — data de entrega (ex: <em>"até sexta-feira"</em> ou <em>"até dia 15 de junho"</em>)</li>
+                    <li><strong>Prioridade</strong> <small>(opcional)</small> — alta, média ou baixa</li>
+                </ul>
+                <details class="voz-exemplo-details">
+                    <summary>Ver exemplo completo</summary>
+                    <p class="voz-exemplo">"Cria uma demanda na área <strong>Comercial</strong>, projeto <strong>Renovação Cliente X</strong>, tarefa de <strong>revisar o contrato e enviar até sexta-feira</strong>, responsável <strong>João como executor</strong> e <strong>Paulo como gestor</strong>, prioridade <strong>alta</strong>."</p>
+                </details>
             </div>
 
             <div class="voz-mic-area">
@@ -616,6 +679,19 @@
             <div class="modal-footer" style="margin-top: 18px;">
                 <button onclick="fecharMeuPerfil()" class="btn-secondary" style="flex:1;">CANCELAR</button>
                 <button onclick="salvarMeuPerfil()" class="btn-primary" style="flex:2;">SALVAR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== QUICK PROMPT (mini-modal reutilizável) ===================== -->
+    <div id="quickPromptModal" class="modal" role="dialog" aria-modal="true">
+        <div class="modal-content shadow" style="max-width: 480px;">
+            <div class="modal-header"><h3 id="quick-prompt-title">Prompt</h3></div>
+            <p id="quick-prompt-hint" style="margin: 0 0 12px; color: #64748b; font-size: 13px;"></p>
+            <textarea id="quick-prompt-textarea" rows="3" style="width:100%" placeholder="Escreva sua mensagem..."></textarea>
+            <div class="modal-footer" style="margin-top: 14px;">
+                <button id="quick-prompt-cancel" class="btn-secondary" style="flex:1;">CANCELAR</button>
+                <button id="quick-prompt-ok" class="btn-primary" style="flex:2;">CONFIRMAR</button>
             </div>
         </div>
     </div>
