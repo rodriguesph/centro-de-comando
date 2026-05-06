@@ -428,6 +428,8 @@ function renderHoje() {
         if (t.status === 'concluido') return false;
         const cs = getCalculatedStatus(t);
         if (cs.id === 'critica') return false; // críticas vão para "atrasadas"
+        // "Atrasada p/ iniciar" (data de início já passou e nada foi marcado em execução) = pra fazer agora
+        if (cs.id === 'atrasada') return true;
         if (t.status === 'andamento') return true;
         if (t.data_fim) {
             const fim = new Date(t.data_fim + 'T00:00:00');
@@ -2184,7 +2186,14 @@ function renderKanban() {
 
     let html = '';
     KANBAN_COLS.forEach(col => {
-        const colTasks = tasks.filter(t => getCalculatedStatus(t).id === col.id || (col.id === 'atrasada' && getCalculatedStatus(t).id === 'atrasada'));
+        const colTasks = tasks.filter(t => {
+            const cs = getCalculatedStatus(t).id;
+            // "Não Iniciadas" abriga tanto tarefas ainda no prazo (nao_iniciada)
+            // quanto tarefas que já passaram da data de início mas não foram marcadas
+            // como "Em Execução" (atrasada). Visualmente são diferenciadas pela cor do card.
+            if (col.id === 'nao_iniciada') return cs === 'nao_iniciada' || cs === 'atrasada';
+            return cs === col.id;
+        });
         html += `<div class="kanban-col" data-status="${col.id}" ondragover="kanbanDragOver(event)" ondragleave="kanbanDragLeave(event)" ondrop="kanbanDrop(event)">
             <div class="kanban-col-header" style="border-bottom-color: ${col.color};">
                 <h4 style="color: ${col.color};">${col.label}</h4>

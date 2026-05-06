@@ -69,11 +69,16 @@ service cloud.firestore {
     }
 
     // ---------------- COLEÇÃO: tarefas ----------------
+    // Reordenado: caminho do executor primeiro (mais barato, sem lookups),
+    // para evitar permission-denied em casos limítrofes do avaliador de regras.
     match /tarefas/{taskId} {
-      allow read: if isCredentialed() && (
+      allow read: if isSignedIn() && (
+        // 1) Executor — barato, sem lookup
+        isExecutorTask(resource.data) ||
+        // 2) Super-admin — requer credenciamento + papel
         isSuperAdmin() ||
-        (resource.data.area != null && isGestorArea(resource.data.area)) ||
-        isExecutorTask(resource.data)
+        // 3) Gestor de área — requer credenciamento + lookup da área
+        (resource.data.area != null && isGestorArea(resource.data.area))
       );
 
       allow create: if isCredentialed() && (
@@ -84,7 +89,7 @@ service cloud.firestore {
       request.resource.data.project is string &&
       request.resource.data.status in ['fazer','andamento','aprovacao','concluido'];
 
-      allow update: if isCredentialed() && (
+      allow update: if isSignedIn() && (
         isSuperAdmin() ||
         (resource.data.area != null && isGestorArea(resource.data.area)) ||
         (
