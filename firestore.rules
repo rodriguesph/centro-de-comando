@@ -1,10 +1,10 @@
 rules_version = '2';
 // ==========================================================================
-// VETOR — Regras de segurança do Firestore
+// VETOR — Regras de segurança do Firestore (rev. 3)
 // ==========================================================================
-// IMPORTANTE: assume que a coleção `usuarios` usa o e-mail como ID do
-// documento (necessário porque o Firestore Rules não permite consultas).
-// O cliente faz essa migração automaticamente no primeiro carregamento.
+// IMPORTANTE: a coleção `usuarios` usa o e-mail como ID do documento.
+// As regras são intencionalmente simples para que o avaliador estático do
+// Firestore consiga validar queries (em particular array-contains em resp_emails).
 // ==========================================================================
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -18,38 +18,42 @@ service cloud.firestore {
       return request.auth.token.email.lower();
     }
 
-    function isCredentialed() {
-      return isSignedIn() &&
-             exists(/databases/$(database)/documents/usuarios/$(userEmail()));
+    function userDocPath() {
+      return /databases/$(database)/documents/usuarios/$(userEmail());
     }
 
-    function userDoc() {
-      return get(/databases/$(database)/documents/usuarios/$(userEmail())).data;
+    function userDocExists() {
+      return isSignedIn() && exists(userDocPath());
+    }
+
+    function userPapel() {
+      return get(userDocPath()).data.papel;
     }
 
     function isSuperAdmin() {
-      return isCredentialed() && userDoc().papel == 'super-admin';
+      return userDocExists() && userPapel() == 'super-admin';
     }
 
     function isGestorArea(areaId) {
-      return isCredentialed() &&
+      return userDocExists() &&
              exists(/databases/$(database)/documents/areas_estrategicas/$(areaId)) &&
              userEmail() in get(/databases/$(database)/documents/areas_estrategicas/$(areaId)).data.gestores;
     }
 
+    // Verifica se o usuário aparece em resp_emails da tarefa.
+    // Usa get(...) com default [] para tolerar tarefas legadas sem o campo.
     function isExecutorTask(taskData) {
-      return taskData.resp_emails is list && userEmail() in taskData.resp_emails;
+      return userEmail() in taskData.get('resp_emails', []);
     }
 
     // ---------------- COLEÇÃO: usuarios ----------------
     // ID do documento = e-mail do usuário (lowercase).
     match /usuarios/{userId} {
       // Qualquer usuário autenticado (mesmo antes do bootstrap) lê /usuarios.
-      // Necessário para o login funcionar (busca seu próprio doc) e para o
-      // tradutor de e-mail→nome funcionar nas demais telas.
+      // Necessário para o login funcionar e para o tradutor de e-mail→nome.
       allow read: if isSignedIn();
 
-      // Cria/exclui: super-admin.
+      // Cria/exclui: somente super-admin.
       allow create, delete: if isSuperAdmin();
 
       // Update:
@@ -64,24 +68,21 @@ service cloud.firestore {
 
     // ---------------- COLEÇÃO: areas_estrategicas ----------------
     match /areas_estrategicas/{areaId} {
-      allow read: if isCredentialed();
+      allow read: if isSignedIn();
       allow create, update, delete: if isSuperAdmin();
     }
 
     // ---------------- COLEÇÃO: tarefas ----------------
-    // Reordenado: caminho do executor primeiro (mais barato, sem lookups),
-    // para evitar permission-denied em casos limítrofes do avaliador de regras.
     match /tarefas/{taskId} {
+      // Read — três caminhos. O caminho do executor é o mais barato e fica primeiro.
       allow read: if isSignedIn() && (
-        // 1) Executor — barato, sem lookup
         isExecutorTask(resource.data) ||
-        // 2) Super-admin — requer credenciamento + papel
         isSuperAdmin() ||
-        // 3) Gestor de área — requer credenciamento + lookup da área
         (resource.data.area != null && isGestorArea(resource.data.area))
       );
 
-      allow create: if isCredentialed() && (
+      // Create — super-admin ou gestor da área de destino.
+      allow create: if isSignedIn() && (
         isSuperAdmin() ||
         (request.resource.data.area != null && isGestorArea(request.resource.data.area))
       ) &&
@@ -89,6 +90,7 @@ service cloud.firestore {
       request.resource.data.project is string &&
       request.resource.data.status in ['fazer','andamento','aprovacao','concluido'];
 
+      // Update — gestor pleno faz qualquer coisa; executor só status (sem concluir) e historico.
       allow update: if isSignedIn() && (
         isSuperAdmin() ||
         (resource.data.area != null && isGestorArea(resource.data.area)) ||
@@ -100,7 +102,8 @@ service cloud.firestore {
         )
       );
 
-      allow delete: if isCredentialed() && (
+      // Delete — super-admin ou gestor da área.
+      allow delete: if isSignedIn() && (
         isSuperAdmin() ||
         (resource.data.area != null && isGestorArea(resource.data.area))
       );
@@ -108,7 +111,7 @@ service cloud.firestore {
 
     // ---------------- COLEÇÃO: ai_logs ----------------
     match /ai_logs/{logId} {
-      allow read: if isCredentialed() && (isSuperAdmin() || resource.data.userEmail == userEmail());
+      allow read: if isSignedIn() && (isSuperAdmin() || resource.data.userEmail == userEmail());
       allow write: if false; // só admin SDK
     }
 

@@ -2871,6 +2871,7 @@ async function adicionarSubtarefa() {
     if (!texto || !currentTaskId) return;
     const t = allTasks.find(x => x.id === currentTaskId);
     if (!t) return;
+    if (!isGestorPlenoOf(t)) return toast('Apenas gestores podem criar subtarefas.', 'warning');
     const subs = Array.isArray(t.subtarefas) ? [...t.subtarefas] : [];
     subs.push({
         id: 'sub_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
@@ -2895,6 +2896,7 @@ async function toggleSubtarefa(subId) {
 async function removerSubtarefa(subId) {
     const t = allTasks.find(x => x.id === currentTaskId);
     if (!t || !t.subtarefas) return;
+    if (!isGestorPlenoOf(t)) return toast('Apenas gestores podem remover subtarefas.', 'warning');
     const subs = t.subtarefas.filter(s => s.id !== subId);
     try { await db.collection('tarefas').doc(currentTaskId).update({ subtarefas: subs }); }
     catch (e) { toast('Falha ao remover subtarefa.', 'error'); }
@@ -2964,6 +2966,7 @@ async function adicionarDependencia() {
     if (!newDep || !currentTaskId) return;
     const t = allTasks.find(x => x.id === currentTaskId);
     if (!t) return;
+    if (!isGestorPlenoOf(t)) return toast('Apenas gestores podem vincular dependências.', 'warning');
     const deps = Array.isArray(t.bloqueadaPor) ? [...t.bloqueadaPor] : [];
     if (deps.includes(newDep)) return;
     deps.push(newDep);
@@ -2976,6 +2979,7 @@ async function adicionarDependencia() {
 async function removerDependencia(taskId) {
     const t = allTasks.find(x => x.id === currentTaskId);
     if (!t || !t.bloqueadaPor) return;
+    if (!isGestorPlenoOf(t)) return toast('Apenas gestores podem remover dependências.', 'warning');
     const deps = t.bloqueadaPor.filter(d => d !== taskId);
     try { await db.collection('tarefas').doc(currentTaskId).update({ bloqueadaPor: deps }); }
     catch (e) { toast('Falha ao remover dependência.', 'error'); }
@@ -3029,6 +3033,7 @@ async function adicionarLink() {
     try { new URL(url); } catch (e) { return toast('URL inválida.', 'warning'); }
     const t = allTasks.find(x => x.id === currentTaskId);
     if (!t) return;
+    if (!isGestorPlenoOf(t)) return toast('Apenas gestores podem adicionar links.', 'warning');
     const links = Array.isArray(t.links) ? [...t.links] : [];
     links.push({
         id: 'lk_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
@@ -3043,6 +3048,7 @@ async function adicionarLink() {
 async function removerLink(linkId) {
     const t = allTasks.find(x => x.id === currentTaskId);
     if (!t || !t.links) return;
+    if (!isGestorPlenoOf(t)) return toast('Apenas gestores podem remover links.', 'warning');
     const links = t.links.filter(l => l.id !== linkId);
     try { await db.collection('tarefas').doc(currentTaskId).update({ links }); }
     catch (e) { toast('Falha ao remover link.', 'error'); }

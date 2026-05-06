@@ -184,6 +184,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--v
 /* ===================== MODAL ===================== */
 .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
 .modal.active { display: flex; }
+/* Modais "secundários" (abertos a partir de outro modal) precisam ficar por cima */
+#confirm-dialog, #quickPromptModal { z-index: 1100; }
 .modal-content { background: #fff; padding: 32px; width: 100%; max-width: 700px; border-radius: var(--radius); max-height: 90vh; overflow-y: auto; }
 .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border-color); }
 .modal-header h3 { font-size: 16px; font-weight: 700; }
@@ -554,12 +556,15 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--v
 .atividade-controls select:disabled { opacity: 0.5; }
 .atividade-publicar { margin-left: auto; }
 
-/* Dropdown de menções */
+/* Wrapper textarea + dropdown — necessário para posicionar o dropdown ACIMA do textarea */
+.atividade-input-wrap { position: relative; }
+
+/* Dropdown de menções — aparece ACIMA do textarea para nunca sair da viewport. */
 .mention-dropdown {
-    display: none; position: absolute; top: 100%; left: 14px; right: 14px;
+    display: none; position: absolute; bottom: 100%; left: 0; right: 0;
     background: #fff; border: 1px solid var(--border-color); border-radius: 6px;
-    margin-top: 4px; box-shadow: var(--shadow-lg); z-index: 50;
-    max-height: 240px; overflow-y: auto;
+    margin-bottom: 4px; box-shadow: var(--shadow-lg); z-index: 60;
+    max-height: 220px; overflow-y: auto;
 }
 .mention-dropdown.open { display: block; }
 .mention-item {
