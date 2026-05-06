@@ -262,6 +262,17 @@ auth.getRedirectResult().catch(e => {
 function loadAreasEstrategicas() {
     db.collection('areas_estrategicas').onSnapshot(snapshot => {
         allAreasData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // managedAreas é calculado AQUI (antes de carregar tarefas) para que loadDataTasks
+        // possa fazer queries corretas por área de acordo com a permissão do usuário.
+        if (currentUserRole === 'super-admin') {
+            managedAreas = allAreasData.map(a => a.id);
+        } else {
+            managedAreas = allAreasData
+                .filter(a => a.gestores && a.gestores.includes(currentUserEmail))
+                .map(a => a.id);
+        }
+
         loadDataTasks();
     }, err => {
         console.error('Erro snapshot áreas:', err);
@@ -281,40 +292,96 @@ function loadUsersDatabase() {
     });
 }
 
+// ==========================================================================
+// CARGA DE TAREFAS — listeners múltiplos por papel para respeitar Security Rules
+// ==========================================================================
+// O Firestore exige que toda a query retorne só documentos lê-veis pelo usuário.
+// Por isso, em vez de uma única query "todas as tarefas" (que fura para executor),
+// o cliente roda 1 a N listeners específicos:
+//   • super-admin: 1 listener com a coleção inteira
+//   • gestor de área: 1 listener por chunk de até 10 áreas (`where('area','in',...)`)
+//   • executor: 1 listener com `where('resp_emails','array-contains', email)`
+// O cliente mescla os resultados em allTasks.
+let _listenersTarefas = [];
+let _tarefasPorListener = {};
+
 function loadDataTasks() {
-    db.collection('tarefas').orderBy('criadoEm', 'desc').onSnapshot(snapshot => {
-        allTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // Cancela listeners anteriores
+    _listenersTarefas.forEach(unsub => { try { unsub(); } catch (e) {} });
+    _listenersTarefas = [];
+    _tarefasPorListener = {};
 
-        if (currentUserRole === 'super-admin') {
-            managedAreas = allAreasData.map(a => a.id);
-            managedProjects = [...new Set(allTasks.map(t => t.project))];
-        } else {
-            managedAreas = allAreasData.filter(a => a.gestores && a.gestores.includes(currentUserEmail)).map(a => a.id);
-            const projsPorArea = allTasks.filter(t => managedAreas.includes(t.area)).map(t => t.project);
-            const projsDiretos = allTasks.filter(t => t.resps && t.resps.some(r => r.email === currentUserEmail && r.papel === 'gestor')).map(t => t.project);
-            managedProjects = [...new Set([...projsPorArea, ...projsDiretos])];
+    if (!currentUserEmail) return;
+
+    function setupListener(key, queryRef) {
+        _tarefasPorListener[key] = new Map();
+        const unsub = queryRef.onSnapshot(snap => {
+            const novoMap = new Map();
+            snap.docs.forEach(d => novoMap.set(d.id, { id: d.id, ...d.data() }));
+            _tarefasPorListener[key] = novoMap;
+            mergeAllTasksAndProcess();
+        }, err => {
+            console.error(`Listener tarefas (${key}):`, err);
+        });
+        _listenersTarefas.push(unsub);
+    }
+
+    if (currentUserRole === 'super-admin') {
+        setupListener('all', db.collection('tarefas'));
+    } else {
+        // Listener: tarefas onde o usuário aparece como executor/responsável
+        setupListener('executor', db.collection('tarefas').where('resp_emails', 'array-contains', currentUserEmail));
+
+        // Listener(es): tarefas das áreas que ele gerencia (chunks de 10 — limite do Firestore para `in`)
+        if (managedAreas.length > 0) {
+            for (let i = 0; i < managedAreas.length; i += 10) {
+                const chunk = managedAreas.slice(i, i + 10);
+                setupListener(`area_${i}`, db.collection('tarefas').where('area', 'in', chunk));
+            }
         }
+    }
+}
 
-        updateNavVisibility();
-        updateProjectAndAreaLists();
-        renderDashboard();
-        updateBIAreaFilter();
-        renderHoje();
-        if (document.getElementById('sec-kanban').classList.contains('active')) renderKanban();
-        if (document.getElementById('sec-busca').classList.contains('active')) executarBusca();
-        if (document.getElementById('sec-arquivo').classList.contains('active')) renderArquivo();
-        migrarRespEmails(); // garante resp_emails em tarefas antigas (preparação para Security Rules)
-        autoArchiveExpired(); // fallback enquanto Cloud Function não está deployada
-
-        // Real-time: se modal de demanda está aberto, re-renderiza seções dinâmicas
-        if (currentTaskId && document.getElementById('taskModal').classList.contains('active')) {
-            const ttask = allTasks.find(x => x.id === currentTaskId);
-            if (ttask) refreshOpenTaskModal(ttask);
-        }
-    }, err => {
-        console.error('Erro snapshot tarefas:', err);
-        toast('Falha ao sincronizar tarefas.', 'error');
+function mergeAllTasksAndProcess() {
+    // Mescla todos os mapas de listeners ativos, deduplicando por ID
+    const merged = new Map();
+    Object.values(_tarefasPorListener).forEach(map => {
+        map.forEach((v, k) => merged.set(k, v));
     });
+
+    function ts(t) {
+        const v = t && t.criadoEm;
+        if (v && typeof v.toMillis === 'function') return v.toMillis();
+        if (v instanceof Date) return v.getTime();
+        return 0;
+    }
+
+    allTasks = Array.from(merged.values()).sort((a, b) => ts(b) - ts(a));
+
+    // managedProjects depende das tarefas (por isso recalculado após o merge)
+    if (currentUserRole === 'super-admin') {
+        managedProjects = [...new Set(allTasks.map(t => t.project))];
+    } else {
+        const projsPorArea = allTasks.filter(t => managedAreas.includes(t.area)).map(t => t.project);
+        const projsDiretos = allTasks.filter(t => t.resps && t.resps.some(r => r.email === currentUserEmail && r.papel === 'gestor')).map(t => t.project);
+        managedProjects = [...new Set([...projsPorArea, ...projsDiretos])];
+    }
+
+    updateNavVisibility();
+    updateProjectAndAreaLists();
+    renderDashboard();
+    updateBIAreaFilter();
+    renderHoje();
+    if (document.getElementById('sec-kanban').classList.contains('active')) renderKanban();
+    if (document.getElementById('sec-busca').classList.contains('active')) executarBusca();
+    if (document.getElementById('sec-arquivo').classList.contains('active')) renderArquivo();
+    migrarRespEmails();
+    autoArchiveExpired();
+
+    if (currentTaskId && document.getElementById('taskModal').classList.contains('active')) {
+        const ttask = allTasks.find(x => x.id === currentTaskId);
+        if (ttask) refreshOpenTaskModal(ttask);
+    }
 }
 
 // ==========================================================================

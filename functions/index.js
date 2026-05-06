@@ -728,6 +728,91 @@ exports.autoArchiveTasks = onSchedule(
 // ============================================================================
 // 7) dailyBriefing — job agendado diário (7h Brasília)
 // ============================================================================
+// Calcula KPIs, saúde, mapa crítico e carga por pessoa para um conjunto de tarefas.
+function computarDadosBriefing(tarefas) {
+  const kpis = {
+    total: tarefas.length,
+    criticas: tarefas.filter(t => calcStatus(t) === 'critica').length,
+    atrasadas: tarefas.filter(t => calcStatus(t) === 'atrasada').length,
+    execucao: tarefas.filter(t => calcStatus(t) === 'execucao').length,
+    aguardando: tarefas.filter(t => calcStatus(t) === 'aguardando').length,
+    concluidas: tarefas.filter(t => calcStatus(t) === 'concluida').length
+  };
+  const ativas = kpis.total - kpis.concluidas;
+  const peso = ativas > 0 ? ((kpis.criticas * 2.5 + kpis.atrasadas * 1.2) / ativas) : 0;
+  const saude = Math.max(0, Math.min(100, Math.round(100 - (peso * 80))));
+
+  const hojeMs = Date.now();
+  const mapaCritico = tarefas
+    .filter(t => calcStatus(t) === 'critica' || calcStatus(t) === 'atrasada')
+    .map(t => {
+      const fim = t.data_fim ? new Date(t.data_fim + 'T00:00:00').getTime() : hojeMs;
+      const atraso = Math.floor((hojeMs - fim) / 86400000);
+      return {
+        titulo: t.text,
+        projeto: t.project || 'Sem projeto',
+        responsavel: (t.resps?.[0]?.nome) || 'Sem responsável',
+        atraso
+      };
+    })
+    .sort((a, b) => b.atraso - a.atraso)
+    .slice(0, 5);
+
+  const cargaMap = {};
+  tarefas.forEach(t => {
+    const cs = calcStatus(t);
+    if (cs === 'concluida') return;
+    (t.resps || []).forEach(r => {
+      if (!cargaMap[r.email]) cargaMap[r.email] = { nome: r.nome.split(' ').slice(0, 2).join(' '), total: 0, criticas: 0 };
+      cargaMap[r.email].total++;
+      if (cs === 'critica') cargaMap[r.email].criticas++;
+    });
+  });
+  const cargaPessoas = Object.values(cargaMap).sort((a, b) => (b.criticas - a.criticas) || (b.total - a.total)).slice(0, 5);
+
+  // Paradas há +5 dias
+  const cincoDias = 5 * 86400000;
+  const paradas = tarefas.filter(t => {
+    if (calcStatus(t) === 'concluida') return false;
+    if (!t.historico || t.historico.length === 0) return false;
+    const ult = t.historico[t.historico.length - 1];
+    const m = (ult.data || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (!m) return false;
+    const d = new Date(`${m[3]}-${m[2]}-${m[1]}`);
+    return (hojeMs - d.getTime()) > cincoDias;
+  }).slice(0, 10);
+
+  return { kpis, saude, mapaCritico, cargaPessoas, paradas, totalTarefas: tarefas.length };
+}
+
+// Gera o diagnóstico em texto via Claude para um briefing
+async function gerarDiagnosticoIA(dados, escopoLabel) {
+  const tarefasCriticas = dados.mapaCritico.slice(0, 10);
+  const sys = `Você é o Vetor IA, redigindo o DIAGNÓSTICO do briefing diário (escopo: ${escopoLabel}).
+NÃO repita números/KPIs (eles já aparecem em cards visuais antes do seu texto).
+Seu papel: interpretar o que está acontecendo no escopo "${escopoLabel}", identificar 2-3 padrões críticos
+e recomendar 1 ação concreta para o gestor agir HOJE. Máximo 12 linhas.
+
+FORMATO obrigatório (Markdown):
+## Padrões observados
+- (1-3 bullets curtos com nomes próprios e dados específicos)
+
+## Recomendação para hoje
+(1 parágrafo curto e direto, com a ação mais importante)
+
+NÃO repita "X tarefas críticas" — o leitor já viu nos cards. Foque em INTERPRETAÇÃO e DIREÇÃO.`;
+
+  const usr = `ESCOPO: ${escopoLabel}
+KPIs: ${JSON.stringify(dados.kpis)}, Saúde: ${dados.saude}%
+TAREFAS CRÍTICAS: ${JSON.stringify(tarefasCriticas)}
+PARADAS +5 DIAS: ${JSON.stringify(dados.paradas.map(t => ({ titulo: t.text, projeto: t.project, ultimo_reporte: t.historico?.[t.historico.length - 1]?.data, resp: t.resps?.[0]?.nome })))}
+CARGA TOP: ${JSON.stringify(dados.cargaPessoas)}
+
+Produza apenas o diagnóstico textual.`;
+
+  return await callClaude(sys, usr);
+}
+
 exports.dailyBriefing = onSchedule(
   {
     schedule: '0 7 * * *',
@@ -737,126 +822,121 @@ exports.dailyBriefing = onSchedule(
   },
   async () => {
     const tasksSnap = await db.collection('tarefas').get();
-    const tarefas = tasksSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => !t.arquivada);
+    const todasTarefas = tasksSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => !t.arquivada);
     const usersSnap = await db.collection('usuarios').get();
     const usuarios = usersSnap.docs.map(d => d.data());
+    const areasSnap = await db.collection('areas_estrategicas').get();
+    const areas = areasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    // KPIs
-    const kpis = {
-      total: tarefas.length,
-      criticas: tarefas.filter(t => calcStatus(t) === 'critica').length,
-      atrasadas: tarefas.filter(t => calcStatus(t) === 'atrasada').length,
-      execucao: tarefas.filter(t => calcStatus(t) === 'execucao').length,
-      aguardando: tarefas.filter(t => calcStatus(t) === 'aguardando').length,
-      concluidas: tarefas.filter(t => calcStatus(t) === 'concluida').length
-    };
-
-    // Saúde da operação (0-100): pondera críticas e atrasadas contra o total
-    const ativas = kpis.total - kpis.concluidas;
-    const peso = ativas > 0 ? ((kpis.criticas * 2.5 + kpis.atrasadas * 1.2) / ativas) : 0;
-    const saude = Math.max(0, Math.min(100, Math.round(100 - (peso * 80))));
-
-    // Mapa Crítico — top 5 tarefas mais urgentes
-    const hojeMs = Date.now();
-    const mapaCritico = tarefas
-      .filter(t => calcStatus(t) === 'critica' || calcStatus(t) === 'atrasada')
-      .map(t => {
-        const fim = t.data_fim ? new Date(t.data_fim + 'T00:00:00').getTime() : hojeMs;
-        const atraso = Math.floor((hojeMs - fim) / 86400000);
-        return {
-          titulo: t.text,
-          projeto: t.project || 'Sem projeto',
-          responsavel: (t.resps?.[0]?.nome) || 'Sem responsável',
-          atraso
-        };
-      })
-      .sort((a, b) => b.atraso - a.atraso)
-      .slice(0, 5);
-
-    // Carga por pessoa — top 5 com mais ativas (não concluídas)
-    const cargaMap = {};
-    tarefas.forEach(t => {
-      const cs = calcStatus(t);
-      if (cs === 'concluida') return;
-      (t.resps || []).forEach(r => {
-        if (!cargaMap[r.email]) cargaMap[r.email] = { nome: r.nome.split(' ').slice(0,2).join(' '), total: 0, criticas: 0 };
-        cargaMap[r.email].total++;
-        if (cs === 'critica') cargaMap[r.email].criticas++;
-      });
-    });
-    const cargaPessoas = Object.values(cargaMap).sort((a, b) => (b.criticas - a.criticas) || (b.total - a.total)).slice(0, 5);
-
-    // Tarefas paradas (sem reporte há +5 dias)
-    const cincoDias = 5 * 86400000;
-    const paradas = tarefas.filter(t => {
-      if (calcStatus(t) === 'concluida') return false;
-      if (!t.historico || t.historico.length === 0) return false;
-      const ult = t.historico[t.historico.length - 1];
-      const m = (ult.data || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
-      if (!m) return false;
-      const d = new Date(`${m[3]}-${m[2]}-${m[1]}`);
-      return (hojeMs - d.getTime()) > cincoDias;
-    }).slice(0, 10);
-
-    // IA: gera só o diagnóstico em prosa (sem precisar repetir KPIs já visuais)
-    const sys = `Você é o Vetor IA, redigindo o DIAGNÓSTICO do briefing diário executivo.
-NÃO repita números/KPIs (eles já aparecem em cards visuais antes do seu texto).
-Seu papel: interpretar o que está acontecendo, identificar 2-3 padrões críticos
-e recomendar 1 ação concreta para o gestor agir HOJE. Máximo 12 linhas.
-
-FORMATO obrigatório (use Markdown):
-## Padrões observados
-- (1-3 bullets curtos com nomes próprios e dados específicos)
-
-## Recomendação para hoje
-(1 parágrafo curto e direto, com a ação mais importante)
-
-NÃO repita "X tarefas críticas" — o leitor já viu nos cards. Foque em INTERPRETAÇÃO e DIREÇÃO.`;
-
-    const usr = `KPIs (já no email): ${JSON.stringify(kpis)}, Saúde: ${saude}%
-TAREFAS CRÍTICAS DETALHADAS: ${JSON.stringify(tarefas.filter(t => calcStatus(t) === 'critica').slice(0, 10).map(t => ({ titulo: t.text, projeto: t.project, prazo: t.data_fim, resp: t.resps?.[0]?.nome })))}
-TAREFAS PARADAS: ${JSON.stringify(paradas.map(t => ({ titulo: t.text, projeto: t.project, ultimo_reporte: t.historico?.[t.historico.length - 1]?.data, resp: t.resps?.[0]?.nome })))}
-CARGA TOP: ${JSON.stringify(cargaPessoas)}
-
-Produza apenas o diagnóstico textual.`;
-
-    const textoIA = await callClaude(sys, usr);
-
-    // Data formatada
     const dt = new Date();
     const dataHoje = dt.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'America/Sao_Paulo' });
 
-    // Configurar transporte
     const transporter = getMailTransporter();
     const fromEmail = GMAIL_USER.value();
 
-    // Enviar para super-admins (email rico) + WhatsApp resumido
+    let totalEnviados = 0;
+
+    // ============================================================
+    // 1) BRIEFING INSTITUCIONAL — para super-admins (todas as tarefas)
+    // ============================================================
     const superAdmins = usuarios.filter(u => u.papel === 'super-admin');
-    for (const u of superAdmins) {
-      const saudacao = `Bom dia, ${(u.nome || '').split(' ')[0]}.`;
-      const html = buildBriefingHtml({ saudacao, dataHoje, kpis, saude, mapaCritico, cargaPessoas, textoIA });
-      try {
-        await transporter.sendMail({
-          from: `"Vetor" <${fromEmail}>`,
-          to: u.email,
-          subject: `[Vetor] Briefing diário — ${dataHoje}`,
-          html
+    const superAdminEmails = new Set(superAdmins.map(u => u.email));
+
+    if (superAdmins.length > 0) {
+      const dados = computarDadosBriefing(todasTarefas);
+      const textoIA = await gerarDiagnosticoIA(dados, 'institucional (toda a operação)');
+
+      for (const u of superAdmins) {
+        const saudacao = `Bom dia, ${(u.nome || '').split(' ')[0]}.`;
+        const html = buildBriefingHtml({
+          saudacao, dataHoje,
+          escopo: 'Visão Institucional',
+          kpis: dados.kpis, saude: dados.saude,
+          mapaCritico: dados.mapaCritico, cargaPessoas: dados.cargaPessoas,
+          textoIA
         });
-      } catch (err) { console.error('briefing email erro:', err); }
-      // WhatsApp: versão curta (template com 3 parâmetros)
-      if (u.telefone) {
-        const resumoWa = `Saúde da operação: ${saude}%. ${kpis.criticas} crítica(s), ${kpis.atrasadas} atrasada(s), ${kpis.execucao} em execução. Acesse o Vetor para ver o briefing completo.`;
         try {
-          await sendWhatsApp(u.telefone, [(u.nome || '').split(' ')[0] || 'Olá', 'BRIEFING DIÁRIO', resumoWa]);
-        } catch (err) { console.error('briefing whatsapp erro:', err); }
+          await transporter.sendMail({
+            from: `"Vetor" <${fromEmail}>`,
+            to: u.email,
+            subject: `[Vetor] Briefing Institucional — ${dataHoje}`,
+            html
+          });
+          totalEnviados++;
+        } catch (err) { console.error('briefing institucional email:', err); }
+
+        if (u.telefone) {
+          const resumoWa = `Saúde da operação: ${dados.saude}%. ${dados.kpis.criticas} crítica(s), ${dados.kpis.atrasadas} atrasada(s). Briefing completo no e-mail.`;
+          try {
+            await sendWhatsApp(u.telefone, [(u.nome || '').split(' ')[0] || 'Olá', 'BRIEFING INSTITUCIONAL', resumoWa]);
+          } catch (err) { console.error('briefing institucional whatsapp:', err); }
+        }
       }
+
+      await db.collection('briefings_diarios').add({
+        data: admin.firestore.FieldValue.serverTimestamp(),
+        tipo: 'institucional', escopo: 'Visão Institucional',
+        kpis: dados.kpis, saude: dados.saude,
+        mapaCritico: dados.mapaCritico, cargaPessoas: dados.cargaPessoas,
+        paradas: dados.paradas.length, textoIA,
+        destinatarios: superAdmins.length
+      });
     }
 
-    await db.collection('briefings_diarios').add({
-      data: admin.firestore.FieldValue.serverTimestamp(),
-      kpis, saude, mapaCritico, cargaPessoas, paradas: paradas.length, textoIA
-    });
+    // ============================================================
+    // 2) BRIEFING POR ÁREA — para gestores de área (que NÃO são super-admin)
+    //    Cada área gera UM briefing focado, enviado a cada gestor da área.
+    // ============================================================
+    for (const area of areas) {
+      const gestoresEmails = (area.gestores || []).filter(em => !superAdminEmails.has(em));
+      if (gestoresEmails.length === 0) continue;
 
-    console.log('Briefing diário (visual) enviado para', superAdmins.length, 'admins.');
+      const tarefasArea = todasTarefas.filter(t => t.area === area.id);
+      // Se a área não tem tarefa nenhuma, pular
+      if (tarefasArea.length === 0) continue;
+
+      const dados = computarDadosBriefing(tarefasArea);
+      const textoIA = await gerarDiagnosticoIA(dados, `área "${area.id}"`);
+
+      for (const gestorEmail of gestoresEmails) {
+        const u = usuarios.find(x => x.email === gestorEmail);
+        if (!u) continue;
+        const saudacao = `Bom dia, ${(u.nome || '').split(' ')[0]}.`;
+        const html = buildBriefingHtml({
+          saudacao, dataHoje,
+          escopo: `Área: ${area.id}`,
+          kpis: dados.kpis, saude: dados.saude,
+          mapaCritico: dados.mapaCritico, cargaPessoas: dados.cargaPessoas,
+          textoIA
+        });
+        try {
+          await transporter.sendMail({
+            from: `"Vetor" <${fromEmail}>`,
+            to: u.email,
+            subject: `[Vetor] Briefing — ${area.id} — ${dataHoje}`,
+            html
+          });
+          totalEnviados++;
+        } catch (err) { console.error(`briefing área ${area.id} email:`, err); }
+
+        if (u.telefone) {
+          const resumoWa = `Área "${area.id}": ${dados.saude}% de saúde. ${dados.kpis.criticas} crítica(s) e ${dados.kpis.atrasadas} atrasada(s) sob sua gestão.`;
+          try {
+            await sendWhatsApp(u.telefone, [(u.nome || '').split(' ')[0] || 'Olá', `BRIEFING ${area.id.toUpperCase().slice(0, 30)}`, resumoWa]);
+          } catch (err) { console.error(`briefing área ${area.id} whatsapp:`, err); }
+        }
+      }
+
+      await db.collection('briefings_diarios').add({
+        data: admin.firestore.FieldValue.serverTimestamp(),
+        tipo: 'area', escopo: `Área: ${area.id}`, areaId: area.id,
+        kpis: dados.kpis, saude: dados.saude,
+        mapaCritico: dados.mapaCritico, cargaPessoas: dados.cargaPessoas,
+        paradas: dados.paradas.length, textoIA,
+        destinatarios: gestoresEmails.length
+      });
+    }
+
+    console.log(`Briefings enviados: ${totalEnviados} e-mails (institucional + por área).`);
   }
 );
