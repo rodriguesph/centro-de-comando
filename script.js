@@ -313,15 +313,20 @@ function loadDataTasks() {
 
     if (!currentUserEmail) return;
 
+    console.log('[Vetor:DEBUG] loadDataTasks — email=%s, role=%s, managedAreas=%o', currentUserEmail, currentUserRole, managedAreas);
+
     function setupListener(key, queryRef) {
         _tarefasPorListener[key] = new Map();
+        console.log('[Vetor:DEBUG] Setup listener "%s"', key);
         const unsub = queryRef.onSnapshot(snap => {
             const novoMap = new Map();
             snap.docs.forEach(d => novoMap.set(d.id, { id: d.id, ...d.data() }));
             _tarefasPorListener[key] = novoMap;
+            console.log('[Vetor:DEBUG] Listener "%s" — recebeu %d documento(s)', key, snap.docs.length);
             mergeAllTasksAndProcess();
         }, err => {
-            console.error(`Listener tarefas (${key}):`, err);
+            console.error('[Vetor:ERROR] Listener "%s" falhou:', key, err.code || '', err.message || err);
+            toast(`Falha ao ler tarefas (${key}): ${err.code || 'erro'}`, 'error', 5000);
         });
         _listenersTarefas.push(unsub);
     }
@@ -329,10 +334,8 @@ function loadDataTasks() {
     if (currentUserRole === 'super-admin') {
         setupListener('all', db.collection('tarefas'));
     } else {
-        // Listener: tarefas onde o usuário aparece como executor/responsável
         setupListener('executor', db.collection('tarefas').where('resp_emails', 'array-contains', currentUserEmail));
 
-        // Listener(es): tarefas das áreas que ele gerencia (chunks de 10 — limite do Firestore para `in`)
         if (managedAreas.length > 0) {
             for (let i = 0; i < managedAreas.length; i += 10) {
                 const chunk = managedAreas.slice(i, i + 10);
@@ -341,6 +344,23 @@ function loadDataTasks() {
         }
     }
 }
+
+// Debug helper: chame `vetorDebug()` no console para ver o estado atual.
+window.vetorDebug = function() {
+    console.log('=== VETOR DEBUG ===');
+    console.log('currentUserEmail:', currentUserEmail);
+    console.log('currentUserNome:', currentUserNome);
+    console.log('currentUserRole:', currentUserRole);
+    console.log('managedAreas:', managedAreas);
+    console.log('managedProjects:', managedProjects);
+    console.log('allTasks total:', allTasks.length);
+    console.log('Listeners ativos:', _listenersTarefas.length);
+    console.log('Tarefas por listener:', Object.entries(_tarefasPorListener).map(([k, m]) => ({ listener: k, count: m.size })));
+    if (allTasks.length > 0) console.log('Exemplo da 1ª tarefa:', { resp_emails: allTasks[0].resp_emails, resps: allTasks[0].resps, area: allTasks[0].area });
+    const u = allUsers.find(x => x.email === currentUserEmail);
+    console.log('Meu doc usuario (id, dados):', u && u.id, u);
+    console.log('===================');
+};
 
 function mergeAllTasksAndProcess() {
     // Mescla todos os mapas de listeners ativos, deduplicando por ID
