@@ -2916,7 +2916,9 @@ function renderDependencias(t) {
         const dep = allTasks.find(x => x.id === taskId);
         return dep && dep.status !== 'concluido';
     });
-    count.textContent = deps.length > 0 ? `(${depsAbertas.length} em aberto / ${deps.length})` : '';
+    // count antigo (#dependencias-count) foi substituído por #tab-count-dependencias e é
+    // atualizado em updateTabCounts(). Mantemos guard para evitar quebra se o elemento existir.
+    if (count) count.textContent = deps.length > 0 ? `(${depsAbertas.length} em aberto / ${deps.length})` : '';
 
     const isGestor = isGestorPlenoOf(t);
     const addArea = document.querySelector('#taskModal .dependencia-add');
@@ -3057,12 +3059,13 @@ async function removerLink(linkId) {
 // ==========================================================================
 // 18. COMENTÁRIOS COM @ MENÇÕES
 // ==========================================================================
+// Função legada — substituída por renderTimelineUnificada(). Mantida apenas para compatibilidade.
 function renderComentarios(t) {
     const list = document.getElementById('comentarios-list');
     const count = document.getElementById('comentarios-count');
     if (!list) return;
     const comentarios = t.comentarios || [];
-    count.textContent = comentarios.length > 0 ? `(${comentarios.length})` : '';
+    if (count) count.textContent = comentarios.length > 0 ? `(${comentarios.length})` : '';
 
     if (comentarios.length === 0) {
         list.innerHTML = '<p class="empty-hint">Nenhum comentário ainda. Use @ para mencionar membros da equipe.</p>';
