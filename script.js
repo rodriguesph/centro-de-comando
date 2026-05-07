@@ -3004,14 +3004,13 @@ function renderLinks(t) {
     const links = t.links || [];
     if (count) count.textContent = links.length > 0 ? `(${links.length})` : '';
 
-    const isGestor = isGestorPlenoOf(t);
+    // Links são editáveis por todos (executor + gestor) — qualquer um envolvido
+    // na tarefa pode anexar referências. Botão de remover sempre disponível também.
     const addArea = document.querySelector('#taskModal .link-add');
-    if (addArea) addArea.style.display = isGestor ? 'flex' : 'none';
+    if (addArea) addArea.style.display = 'flex';
 
     if (links.length === 0) {
-        list.innerHTML = isGestor
-            ? '<p class="empty-hint">Nenhum link vinculado. Adicione abaixo.</p>'
-            : '<p class="empty-hint">Nenhum link de referência foi vinculado pelo gestor.</p>';
+        list.innerHTML = '<p class="empty-hint">Nenhum link vinculado. Adicione abaixo.</p>';
         return;
     }
     list.innerHTML = links.map(l => `
@@ -3021,7 +3020,7 @@ function renderLinks(t) {
                 <strong>${escapeHtml(l.label || 'Link')}</strong>
                 <small>${escapeHtml(l.url.length > 40 ? l.url.slice(0, 40) + '...' : l.url)}</small>
             </a>
-            ${isGestor ? `<button class="link-remove" onclick="removerLink('${l.id}')" aria-label="Remover">&times;</button>` : ''}
+            <button class="link-remove" onclick="removerLink('${l.id}')" aria-label="Remover">&times;</button>
         </div>
     `).join('');
 }
@@ -3035,7 +3034,6 @@ async function adicionarLink() {
     try { new URL(url); } catch (e) { return toast('URL inválida.', 'warning'); }
     const t = allTasks.find(x => x.id === currentTaskId);
     if (!t) return;
-    if (!isGestorPlenoOf(t)) return toast('Apenas gestores podem adicionar links.', 'warning');
     const links = Array.isArray(t.links) ? [...t.links] : [];
     links.push({
         id: 'lk_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
@@ -3050,7 +3048,6 @@ async function adicionarLink() {
 async function removerLink(linkId) {
     const t = allTasks.find(x => x.id === currentTaskId);
     if (!t || !t.links) return;
-    if (!isGestorPlenoOf(t)) return toast('Apenas gestores podem remover links.', 'warning');
     const links = t.links.filter(l => l.id !== linkId);
     try { await db.collection('tarefas').doc(currentTaskId).update({ links }); }
     catch (e) { toast('Falha ao remover link.', 'error'); }

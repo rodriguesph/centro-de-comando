@@ -90,14 +90,21 @@ service cloud.firestore {
       request.resource.data.project is string &&
       request.resource.data.status in ['fazer','andamento','aprovacao','concluido'];
 
-      // Update — gestor pleno faz qualquer coisa; executor só status (sem concluir) e historico.
+      // Update — gestor pleno faz qualquer coisa; executor pode:
+      //   • mudar status (sem concluir — só fazer/andamento/aprovacao)
+      //   • adicionar entradas no historico
+      //   • adicionar/editar comentarios (na timeline de Atividade)
+      //   • marcar subtarefas como concluídas (toggle)
+      //   • adicionar/remover links de referência
+      // Mudanças estruturais (subtarefa nova/removida, dependência, mudança de
+      // equipe, prioridade, datas, título) ficam restritas a gestor pleno.
       allow update: if isSignedIn() && (
         isSuperAdmin() ||
         (resource.data.area != null && isGestorArea(resource.data.area)) ||
         (
           isExecutorTask(resource.data) &&
           request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly(['status','historico']) &&
+              .hasOnly(['status','historico','comentarios','subtarefas','links']) &&
           request.resource.data.status in ['fazer','andamento','aprovacao']
         )
       );
