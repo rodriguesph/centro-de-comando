@@ -107,7 +107,6 @@
             <div class="nav-container">
                 <button onclick="showSection('hoje')" id="btn-nav-hoje" class="nav-link active">HOJE</button>
                 <button onclick="showSection('dashboard-bi')" id="btn-nav-bi" class="nav-link">LIVE BI</button>
-                <button onclick="showSection('acompanhamento')" id="btn-nav-op" class="nav-link">OPERACIONAL</button>
                 <button onclick="showSection('kanban')" id="btn-nav-kanban" class="nav-link">KANBAN</button>
                 <button onclick="showSection('busca')" id="btn-nav-busca" class="nav-link">BUSCA</button>
                 <button onclick="showSection('arquivo')" id="btn-nav-arquivo" class="nav-link" style="display:none;">ARQUIVO</button>
@@ -327,20 +326,6 @@
                 </div>
             </section>
 
-            <!-- ====== ABA OPERACIONAL ====== -->
-            <section id="sec-acompanhamento" class="content-section">
-                <div class="section-header" style="flex-wrap: wrap; gap: 15px;">
-                    <h2>Visão Operacional</h2>
-                    <div style="display: flex; gap: 10px; margin-left: auto;">
-                        <select id="filterAreaOp" onchange="updateOpProjectFilter()" class="select-filter" style="width: 200px; padding: 8px;"></select>
-                        <select id="filterProjectOp" onchange="renderDashboard()" class="select-filter" style="width: 200px; padding: 8px;"></select>
-                        <button class="btn-export" onclick="exportarOperacional('csv')" title="Exportar visão operacional em CSV">⤓ CSV</button>
-                    </div>
-                </div>
-                <div id="stats-grid" class="stats-grid"></div>
-                <div id="projectsBoard" class="table-container shadow"></div>
-            </section>
-
             <!-- ====== ABA KANBAN ====== -->
             <section id="sec-kanban" class="content-section">
                 <div class="section-header" style="flex-wrap: wrap; gap: 15px;">
@@ -348,6 +333,7 @@
                     <div style="display: flex; gap: 10px; margin-left: auto;">
                         <select id="kanbanAreaFilter" onchange="renderKanban()" class="select-filter" style="width: 200px; padding: 8px;"></select>
                         <select id="kanbanProjectFilter" onchange="renderKanban()" class="select-filter" style="width: 200px; padding: 8px;"></select>
+                        <button class="btn-export" onclick="exportarKanban()" title="Exportar tarefas visíveis em CSV">⤓ CSV</button>
                     </div>
                 </div>
                 <p class="kanban-hint">Arraste cartões entre as colunas para mudar o status. Permissões respeitadas: executores movem até "Aguardando Validação"; só gestores marcam "Concluída".</p>

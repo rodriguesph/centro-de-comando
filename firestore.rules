@@ -53,8 +53,15 @@ service cloud.firestore {
       // Necessário para o login funcionar e para o tradutor de e-mail→nome.
       allow read: if isSignedIn();
 
-      // Cria/exclui: somente super-admin.
-      allow create, delete: if isSuperAdmin();
+      // Create: super-admin OU qualquer credenciado criando um MEMBRO comum.
+      // (Gestores de área podem credenciar novos membros; nunca criar super-admin.)
+      allow create: if isSuperAdmin() || (
+        userDocExists() &&
+        request.resource.data.papel == 'membro'
+      );
+
+      // Exclui: somente super-admin.
+      allow delete: if isSuperAdmin();
 
       // Update:
       //   - Super-admin: tudo.

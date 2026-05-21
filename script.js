@@ -87,6 +87,37 @@ function getPriorityColor(p) {
 }
 
 // ==========================================================================
+// PROGRESSO POR SUBTAREFAS
+// ==========================================================================
+// Retorna percentual de conclusão baseado nas subtarefas marcadas, ou null se não há subtarefas.
+function calcularProgresso(t) {
+    const subs = Array.isArray(t.subtarefas) ? t.subtarefas : [];
+    if (subs.length === 0) return null;
+    const done = subs.filter(s => s.concluida).length;
+    return Math.round((done / subs.length) * 100);
+}
+
+// Gera HTML de barra de progresso. opts.compact = versão menor para cards.
+function renderProgressBar(t, opts = {}) {
+    const p = calcularProgresso(t);
+    if (p === null) return '';
+    const subs = t.subtarefas || [];
+    const done = subs.filter(s => s.concluida).length;
+    // Cor da barra muda conforme avança
+    let cor = '#3b82f6';
+    if (p === 100) cor = '#10b981';
+    else if (p >= 50) cor = '#2563eb';
+    else if (p > 0) cor = '#f59e0b';
+    else cor = '#cbd5e1';
+    const compactClass = opts.compact ? ' progress-compact' : '';
+    const label = opts.compact ? `${p}%` : `${done}/${subs.length} · ${p}%`;
+    return `<div class="progress-wrap${compactClass}">
+        <div class="progress-track"><div class="progress-fill" style="width:${p}%; background:${cor};"></div></div>
+        <span class="progress-pct">${label}</span>
+    </div>`;
+}
+
+// ==========================================================================
 // 1. NAVEGAÇÃO E CONTROLE DE ACESSO
 // ==========================================================================
 function showSection(sec) {
@@ -99,7 +130,6 @@ function showSection(sec) {
     const navMap = {
         'hoje': 'btn-nav-hoje',
         'dashboard-bi': 'btn-nav-bi',
-        'acompanhamento': 'btn-nav-op',
         'kanban': 'btn-nav-kanban',
         'busca': 'btn-nav-busca',
         'arquivo': 'btn-nav-arquivo',
@@ -146,7 +176,8 @@ function updateNavVisibility() {
     document.getElementById('btn-nav-admin').style.display = 'none';
 
     // Itens do dropdown de configurações:
-    document.getElementById('config-equipe').style.display = isSuperAdmin ? 'flex' : 'none';
+    // Equipe: super-admin e gestores de área (gestores só podem CREDENCIAR; editar/remover é só super-admin).
+    document.getElementById('config-equipe').style.display = (isSuperAdmin || isGestorArea) ? 'flex' : 'none';
     document.getElementById('config-admin').style.display = isSuperAdmin ? 'flex' : 'none';
 
     const currentActive = document.querySelector('.content-section.active')?.id;
@@ -389,7 +420,6 @@ function mergeAllTasksAndProcess() {
 
     updateNavVisibility();
     updateProjectAndAreaLists();
-    renderDashboard();
     updateBIAreaFilter();
     renderHoje();
     if (document.getElementById('sec-kanban').classList.contains('active')) renderKanban();
@@ -477,6 +507,7 @@ function renderHojeColuna(listId, countId, tasks, categoria) {
                 <span>📅 ${prazo}</span>
                 <span class="status-pill ${cs.class}" style="font-size:9px;">${cs.label}</span>
             </div>
+            ${renderProgressBar(t, { compact: true })}
             ${renderTaskMetaIcons(t)}
             ${renderHojeQuickActions(t, categoria)}
         </div>`;
@@ -857,6 +888,13 @@ async function cadastrarUsuario() {
     const email = document.getElementById('novoUserEmail').value.toLowerCase().trim();
     const telefone = normalizarTelefone(document.getElementById('novoUserTelefone').value.trim());
     if (!nome || !email) return toast('Preencha nome e e-mail.', 'warning');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('E-mail inválido.', 'warning');
+
+    // Proteção: não sobrescrever um usuário já existente (especialmente um super-admin).
+    if (allUsers.some(u => u.email === email)) {
+        return toast('Já existe um usuário com esse e-mail. Para alterar, use o botão Editar (apenas admin).', 'warning', 5000);
+    }
+
     try {
         // ID do documento = email (necessário para Security Rules conseguirem checar via exists())
         await db.collection('usuarios').doc(email).set({ nome, email, telefone, papel: 'membro' });
@@ -865,7 +903,7 @@ async function cadastrarUsuario() {
         document.getElementById('novoUserTelefone').value = '';
         toast(`${nome} liberado para usar o Vetor.`, 'success');
     } catch (e) {
-        toast('Falha ao credenciar membro.', 'error');
+        toast('Falha ao credenciar membro. Verifique suas permissões.', 'error');
     }
 }
 
@@ -1268,7 +1306,7 @@ async function saveDemand() {
         document.getElementById('responsaveis-container').innerHTML = '';
         addResponsavelField('responsaveis-container');
         resetNewDemandState();
-        showSection('acompanhamento');
+        showSection('kanban');
     } catch (e) {
         console.error(e);
         toast('Erro ao lançar as demandas. Verifique suas permissões.', 'error');
@@ -2216,6 +2254,7 @@ function renderKanban() {
                         <span>📅 ${prazo}</span>
                         <span>👤 ${escapeHtml(respNomes)}</span>
                     </div>
+                    ${renderProgressBar(t, { compact: true })}
                     ${renderTaskMetaIcons(t)}
                 </div>`;
             });
@@ -2364,11 +2403,16 @@ function exportarBI() {
     downloadCSV(csv, `vetor-bi-${new Date().toISOString().slice(0,10)}.csv`);
     toast(`${currentFilteredTasks.length} tarefa(s) exportada(s).`, 'success');
 }
-function exportarOperacional() {
-    const t = getFilteredOperationalTasks();
-    const csv = tasksToCSV(t);
-    downloadCSV(csv, `vetor-operacional-${new Date().toISOString().slice(0,10)}.csv`);
-    toast(`${t.length} tarefa(s) exportada(s).`, 'success');
+// Exporta as tarefas visíveis no Kanban (respeitando filtros de área/projeto)
+function exportarKanban() {
+    const ka = document.getElementById('kanbanAreaFilter')?.value || 'geral';
+    const kp = document.getElementById('kanbanProjectFilter')?.value || 'geral';
+    let tasks = getVisibleTasksBoard();
+    if (ka !== 'geral') tasks = tasks.filter(t => (t.area || 'Sem Área') === ka);
+    if (kp !== 'geral') tasks = tasks.filter(t => t.project === kp);
+    const csv = tasksToCSV(tasks);
+    downloadCSV(csv, `vetor-kanban-${new Date().toISOString().slice(0,10)}.csv`);
+    toast(`${tasks.length} tarefa(s) exportada(s).`, 'success');
 }
 
 // ==========================================================================
@@ -2856,13 +2900,16 @@ function renderSubtarefas(t) {
             : '<p class="empty-hint">O gestor ainda não definiu subtarefas para esta demanda.</p>';
         return;
     }
-    list.innerHTML = subs.map(s => `
+    // Barra de progresso no topo da lista
+    const progressoHtml = `<div class="subtarefa-progresso">${renderProgressBar(t)}</div>`;
+    const itensHtml = subs.map(s => `
         <div class="subtarefa-item ${s.concluida ? 'done' : ''}">
             <input type="checkbox" ${s.concluida ? 'checked' : ''} onchange="toggleSubtarefa('${s.id}')">
             <span class="subtarefa-texto">${escapeHtml(s.texto)}</span>
             ${isGestor ? `<button class="subtarefa-remove" onclick="removerSubtarefa('${s.id}')" aria-label="Remover">&times;</button>` : ''}
         </div>
     `).join('');
+    list.innerHTML = progressoHtml + itensHtml;
 }
 
 async function adicionarSubtarefa() {
@@ -3514,17 +3561,41 @@ function renderArquivo() {
             const respNomes = t.resps && t.resps.length > 0 ? t.resps.map(r => r.nome.split(' ')[0]).join(', ') : '—';
             const dataConclusao = t.data_fim ? t.data_fim.split('-').reverse().join('/') : '—';
             const cs = getCalculatedStatus(t);
+            const podeExcluir = isGestorPlenoOf(t);
             html += `<div class="arquivo-task">
                 <div class="arquivo-task-info">
                     <strong>${escapeHtml(t.text)}</strong>
                     <small>Concluída em ${dataConclusao} · Responsáveis: ${escapeHtml(respNomes)} · <span class="status-pill ${cs.class}" style="font-size:9px;">${cs.label}</span></small>
                 </div>
-                <button class="btn-desarquivar" onclick="arquivarTarefa('${t.id}', false)">↺ DESARQUIVAR</button>
+                <div class="arquivo-task-actions">
+                    <button class="btn-desarquivar" onclick="arquivarTarefa('${t.id}', false)">↺ DESARQUIVAR</button>
+                    ${podeExcluir ? `<button class="btn-excluir-arquivo" onclick="excluirTarefaArquivada('${t.id}')" title="Excluir permanentemente">🗑 EXCLUIR</button>` : ''}
+                </div>
             </div>`;
         });
         html += `</div>`;
     });
     cont.innerHTML = html;
+}
+
+// Exclui permanentemente uma tarefa arquivada (somente gestor pleno).
+async function excluirTarefaArquivada(taskId) {
+    const t = allTasks.find(x => x.id === taskId);
+    if (!t) return;
+    if (!isGestorPlenoOf(t)) return toast('Apenas gestores podem excluir.', 'warning');
+    const ok = await vetorConfirm(
+        `Excluir PERMANENTEMENTE a tarefa "${t.text}"? Esta ação não pode ser desfeita.`,
+        'Excluir definitivamente'
+    );
+    if (!ok) return;
+    try {
+        await db.collection('tarefas').doc(taskId).delete();
+        toast('Tarefa excluída permanentemente.', 'success');
+        renderArquivo();
+    } catch (e) {
+        console.error(e);
+        toast('Falha ao excluir. Verifique suas permissões.', 'error');
+    }
 }
 
 // Migração one-shot: converte usuários antigos (ID aleatório) para ID = email.

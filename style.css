@@ -291,11 +291,17 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--v
 .arquivo-task-info strong { display: block; }
 .arquivo-task-info small { color: var(--text-muted); }
 .arquivo-empty { background: #fff; padding: 60px 20px; text-align: center; color: var(--text-muted); border-radius: var(--radius); border: 1px dashed var(--border-color); }
+.arquivo-task-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .btn-desarquivar {
     background: #f0fdf4; border: 1px solid #86efac; color: #047857;
     padding: 6px 12px; border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer;
 }
 .btn-desarquivar:hover { background: #dcfce7; }
+.btn-excluir-arquivo {
+    background: #fef2f2; border: 1px solid #fca5a5; color: #b91c1c;
+    padding: 6px 12px; border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer;
+}
+.btn-excluir-arquivo:hover { background: #fee2e2; }
 
 /* ===================== HISTÓRICO ===================== */
 .history-box { font-size: 12px; }
@@ -582,6 +588,26 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--v
 }
 .mention-info strong { display: block; font-size: 12px; color: var(--text-main); }
 .mention-info small { font-size: 10px; color: var(--text-muted); }
+
+/* ===================== BARRA DE PROGRESSO (subtarefas) ===================== */
+.progress-wrap {
+    display: flex; align-items: center; gap: 8px; margin-top: 8px;
+}
+.progress-track {
+    flex: 1; height: 8px; background: #e2e8f0; border-radius: 100px; overflow: hidden;
+}
+.progress-fill {
+    height: 100%; border-radius: 100px; transition: width 0.3s ease; min-width: 0;
+}
+.progress-pct {
+    font-size: 11px; font-weight: 700; color: var(--text-muted); white-space: nowrap;
+}
+.progress-compact .progress-track { height: 6px; }
+.progress-compact .progress-pct { font-size: 10px; }
+/* Barra dentro da tab Subtarefas (mais destaque) */
+.subtarefa-progresso { margin-bottom: 12px; }
+.subtarefa-progresso .progress-track { height: 12px; }
+.subtarefa-progresso .progress-pct { font-size: 13px; color: var(--text-main); }
 
 /* Indicadores nos cards (Kanban + Hoje) */
 .card-meta-row {
